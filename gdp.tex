@@ -559,7 +559,7 @@ access :: Index phi -> BST phi k v -> (k,v)
       \RightLabel{\scriptsize (eq)}\UnaryInfC{$|x| = 1 + n$}
       \BinaryInfC{$0 = 1 + n$}
       \AxiomC{}
-      \UnaryInfC{$\forall m.~ \neg (0 = 1 + m)$}
+      \UnaryInfC{$\forall m \in \mathbb{N}.~ \neg (0 = 1 + m)$}
       \UnaryInfC{$\neg (0 = 1 + n)$}
       \BinaryInfC{$\bot$}
       \UnaryInfC{$\texttt{IsCons}(x)$}
@@ -568,7 +568,9 @@ access :: Index phi -> BST phi k v -> (k,v)
       \RightLabel{\scriptsize (q)}\UnaryInfC{$\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)|$}
       \UnaryInfC{$\texttt{IsCons}(x)$}
       \RightLabel{\scriptsize (q)}\UnaryInfC{$\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)| \longrightarrow \texttt{IsCons}(x)$}
-      \AxiomC{}\UnaryInfC{$(\texttt{IsNil}(x) \wedge |x| = 0) \vee (\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)|)$}
+      \AxiomC{}
+      \UnaryInfC{$\forall \ell \in \texttt{List}_T.~ (\texttt{IsNil}(\ell) \wedge |\ell| = 0) \vee (\texttt{IsCons}(\ell) \wedge |\ell| = 1 + |\texttt{Tail}(\ell)|)$}
+      \UnaryInfC{$(\texttt{IsNil}(x) \wedge |x| = 0) \vee (\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)|)$}
       \TrinaryInfC{$\texttt{IsCons}(x)$}
       \RightLabel{\scriptsize (eq)}\UnaryInfC{$|x| = 1 + n \longrightarrow \texttt{IsCons(x)}$}
     \end{prooftree}
