@@ -1,0 +1,30 @@
+name:                gdp-demo
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/matt-noonan/gdp-demo#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Matt Noonan
+maintainer:          matt.noonan@gmail.com
+copyright:           (c) 2017 Matt Noonan
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     The
+                     , Sized
+                     , Named
+                     , Lists
+                     , Sorted
+                     , Examples.Dot
+                     , Examples.Sorting
+  build-depends:       base >= 4.7 && < 5
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/matt-noonan/gdp-demo

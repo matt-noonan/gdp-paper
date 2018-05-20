@@ -1,9 +1,10 @@
-module Named (Named, name) where
+module Named (Named, type (~~), name) where
 
 import The
 
 newtype Named name a = Named a
 instance The (Named name a) a
+type a ~~ name = Named name a
 
-name :: a -> (forall name. Named name a -> t) -> t
+name :: a -> (forall name. (a ~~ name) -> t) -> t
 name x k = k (coerce x)

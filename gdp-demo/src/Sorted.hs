@@ -1,11 +1,16 @@
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances     #-}
+
 module Sorted
-  (Named, SortedBy, sortBy, mergeBy) where
+  ( SortedBy, sortBy, mergeBy
+  ) where
 
 import The
 import Named
 
-import qualified Data.List as L
-import qualified Data.List.Utils as U
+import Data.Coerce (coerce)
+import qualified Lists as L
 
 newtype SortedBy o a = SortedBy a
 instance The (SortedBy o a) a
@@ -20,4 +25,4 @@ mergeBy :: ((a -> a -> Ordering) ~~ comp)
         -> SortedBy comp [a]
         -> SortedBy comp [a]
 mergeBy comp xs ys =
-  coerce (U.mergeBy (the comp) (the xs) (the ys))
+  coerce (L.mergeBy (the comp) (the xs) (the ys))

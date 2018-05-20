@@ -79,6 +79,8 @@
   {elem} {$\in$} 1
 }
 
+\usepackage{cleveref}
+
 % Metadata Information
 \acmJournal{TWEB}
 \acmVolume{9}
@@ -186,12 +188,7 @@ multi-channel, radio interference, time synchronization}
 
 \section{Introduction}
 
-\subsection{Encoding with Universals}
-
-It is a theorem of both classical and constructive logics that
-\[\forall t.~ (\forall s. \varphi(s) \Rightarrow t) \Rightarrow t \equiv \exists c.~ \varphi(c)\]
-
-\section{Warmup: Not quite dependent types}
+\section{Warmup: Faux dependent types}
 
 \begin{filecontents*}{ex1.hs}  
 {-# LANGUAGE RankNTypes #-}
@@ -246,47 +243,55 @@ main = do
     and a usage example.}
 \end{figure}
 
-
-\begin{lstlisting}[language=Haskell]
-  norm2 :: [Double] -> Double
-  norm2 xs = sizing xs (\v -> v `dot` v)
-\end{lstlisting}
-
-\begin{lstlisting}[language=Haskell]
-  sizing xs $ \xs' -> 
-    case align xs' ys of
-      Just ys' -> (xs' `dot` ys') / (xs' `dot` xs')
-      Nothing  -> 17
-\end{lstlisting}
-
-Despite  • appearences, the phantom type parameter $n$ does not really represent the vector's length
+Despite  appearences, the phantom type parameter $n$ does not really represent the vector's length
 {\em per se}. Instead, we propose to think of \texttt{Size n} as a predicate, and values of
-type \texttt{Size n [a]} should be thought of as ``lists of type \texttt{[a]}, equipped with a proof
-that they satisfy \texttt{Size n}''. Critically, this proof has no run-time impact: it is trapped in
-the phantom type parameter.
+type \texttt{Size n [a]} as ``lists of type \texttt{[a]}, equipped with a proof
+that they satisfy \texttt{Size n}''. Critically, this proof has no run-time impact: it is trapped in the phantom type parameter, and carried by a \texttt{newtype} wrapper that vanishes in
+the final compilation.
 
-This approach gives us a straightforward way to interpret the type signatures from example ***:
-
-\begin{lstlisting}[language=Haskell]
-  -- You can take the dot product of two lists, if you have proven
-  -- that they have the same Size n.
-  dot :: Size n [Double] -> Size n [Double] -> Double
-
-  -- When you map a function over a list of Size n, the
-  -- result will also have Size n.
-  smap :: (a -> b) -> Size n [a] -> Size n [b]
-
-  -- For any list, there is some n such that Size n is true.
-  sizing :: [a] -> (forall n. Size n [a] -> t) -> t
-
-  -- Given a list of Size n, we may be able to prove that
-  -- another list also has Size n.
-  align :: Size n [a] -> [b] -> Maybe (Size n [b])
-\end{lstlisting}
 
 As we attach increasingly sophisticated information into the phantom types, it becomes useful to
 have a uniform method for \emph{forgetting} all of the ornamentation, revealing the normal
 value underneath.
+
+\subsection{Manipulating sizes}
+
+\begin{minted}{haskell}
+data Zero
+data Add x y
+
+nil :: Size Zero [a]
+nil = Size []
+
+(+++) :: Size n [a] -> Size m [a] -> Size (Add n m) [a]
+xs +++ ys = coerce (the xs ++ the ys)
+
+zero_neutral :: Size (Add Zero n) a -> Size n a
+zero_neutral = coerce
+
+add_commutes :: Size (Add n m) a -> Size (Add m n) a
+add_commutes = coerce
+\end{minted}
+
+
+\begin{minted}{haskell}
+norm2 :: Size n [Double] -> Double
+norm2 xs = dot xs (ok $ xs +++ nil)
+  where
+    ok = zero_neutral . add_commutes
+\end{minted}
+
+\subsection{Infinite lists}
+
+\begin{minted}{haskell}
+data Infinite
+
+omega :: Size Infinite [Int]
+omega = Size [0..]
+
+pop :: Size Infinite [a] -> (a, Size Infinite [a])
+pop (Size xs) = (head xs, Size (tail xs))
+\end{minted}
 
 \begin{filecontents*}{theTC.hs}
 class The d a | d -> a where
@@ -305,17 +310,135 @@ instance The (Size n a) a
     \texttt{instance} declaration.}
 \end{figure}
 
+\section{And what inhabits these phantom types?}
+They represent neither run-time values nor type-level computation, nor yet nothing.
+May we not call them Ghosts of Departed Proofs?
+
+The techniques described in this paper can be applied to many
+situations that traditionally would belong to the domain of
+\emph{dependent types} or \emph{refinement types}. However, the
+GDP approach has a few advantages:
+\begin{itemize}
+\item Only mild extensions to a Damas-Hindley-Milner type system
+  ({\it e.g.} rank-2 types, a module system, phantom types) are required to
+  implement the technique.
+\item Propositions are encoded in the phantom types, so the
+  \emph{proofs} are written in the normal value-level language.
+  No type-level computation is required.
+\item Proofs are explicit, not implicit as in Liquid Haskell. There is
+  no reliance on third-party solvers that may fail to complete a check,
+  or may vary in their behavior from platform to platform.
+\item Proofs are concrete entities within the host language, and can
+  be analyzed or audited independently. Tooling for the host language
+  can be used within the proof language.
+\end{itemize}
+
+In the following sections, we will investigate several case studies that
+demonstrate how the GDP approach can help create libraries for common
+software engineering tasks, while ensuring that the end-user can only
+use the library API safely. The theme throughout is:
+\begin{itemize}
+\item Use phantom type parameters to carry proofs that program invariants are satisfied.
+\item Export combinators for manipulating these proofs.
+\item Restrict the user's ability to introduce these proofs.
+\end{itemize}
+
 \section{Case Study \#1: Sorted lists}
 
+Surely every programmer has, at some time, had to work with collections of
+lists that were required to be sorted in one way or another. Within some
+context, the programmer may need to ensure that certain invariants hold, such
+as ``all of these lists have been sorted by the same comparator''. For a concrete
+example, consider these \texttt{sortBy} and \texttt{mergeBy} functions:
+\begin{minted}{haskell}
+sortBy  :: (a -> a -> Ordering) -> [a] -> [a]
+
+-- Usage constraint: in `mergeBy comp xs ys`, the
+-- input lists `xs` and `ys` should also be sorted
+-- by the same comparator `comp`.
+mergeBy :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeBy comp xs ys = go xs ys
+  where
+    go []  ys' = ys'
+    go xs' []  = xs'
+    go (x:xs') (y:ys') = case comp x y of
+      GT -> y : go (x:xs') ys'
+      _  -> x : go xs' (y:ys')
+\end{minted}
+This efficient $O(n+m)$ implementation of \texttt{mergeBy} is easy to write,
+but puts the onus on the caller of \texttt{mergeBy} to ensure that the
+input lists have been sorted by the same comparator.
+
+It would be possible to implement a version of \texttt{mergeBy} that
+carefully inspected the inputs \texttt{xs} and \texttt{ys} as it
+proceeded, and only produced a result if the inputs met the sorting
+requirement. But this would impose a runtime cost on every use of
+\texttt{mergeBy}, increase the complexity of its implementation,
+and change the result type to \texttt{Maybe [a]}. And then what?
+Most users of \texttt{mergeBy} would argue to themselves ``This is
+absurd! I already know the input lists were sorted properly. This
+function will never result in \texttt{Nothing}.'' It would be hard
+to blame the user when they reach for an  unsafe function like
+\texttt{fromJust :: Maybe a -> a}.
+
+Clearly, there is little benefit for anybody in the above scenario. The
+library author is inconvenienced by the increased implementation complexity.
+The user is inconvenienced by the decreased performance and the need to
+pattern match on the result, even when they believe they already know the
+outcome of that match. No wonder that the status quo is to just write
+the simple function along with a warning in the documentation, admonishing
+any user who tries to \texttt{mergeBy} what they didn't \texttt{sortBy}.
+
+But if the user really \emph{does} have evidence that the input lists have
+been sorted properly, can we devise a mechanism by which they can convince
+\texttt{mergeBy}?
+
+\subsection{Conjuring a name}
+The first problem that we run into is ``how can we talk about the comparators
+being `the same' ''? In a language that supports equality tests on functions,
+you could imagine a solution where the \texttt{sortBy} function returns a sorted
+list along with a reference to the comparator that was used; \texttt{mergeBy} could
+then check that the comparators matched. But this has a run-time cost for carrying
+around the comparator references, and it still would require \texttt{mergeBy} to
+return \texttt{Nothing} if it was given bogus arguments.
+
+Following the GDP approach, we can introduce a proposition ``is named \texttt{name}'',
+represented by a \texttt{newtype} wrapper with phantom type parameter \texttt{name}.
+In code, we will write this proposition as \verb|a ~~ n|, to be read as
+``values of type \texttt{a} with name \texttt{n}''. A simple module for named values
+can be found in \cref{name-module}; the only property that we encode is
+``any value can be given a name'', represented by the exported \texttt{name} function.
+
+With the \texttt{Named} module, we can write some spooky functions. For example,
+here is a function that can only be invoked by giving it two values with the same
+name:
+\begin{minted}{haskell}
+same :: (a ~~ name) -> (a ~~ name) -> IO ()
+same _ _ = putStrLn "same! (but you already knew that)"
+\end{minted}
+Since the \texttt{Named} module does not provide any mechanism for transferring
+a name from one value to another, ****
+
+Still less useful, these two functions cannot be invoked at all:
+\begin{minted}{haskell}
+data Bob
+
+bobOnly :: (a ~~ Bob) -> IO ()
+bobOnly _ = error "Hi, Bob!"
+
+sameButDifferent :: (a ~~ name) -> (b ~~ name) -> IO ()
+sameButDifferent _ _ = error "Impossible!"
+\end{minted}
 \begin{filecontents*}{named.hs}
-module Named (Named, name) where
+module Named (Named, type (~~), name) where
 
 import The
 
 newtype Named name a = Named a
 instance The (Named name a) a
+type a ~~ name = Named name a
 
-name :: a -> (forall name. Named name a -> t) -> t
+name :: a -> (forall name. (a ~~ name) -> t) -> t
 name x k = k (coerce x)
 \end{filecontents*}
 
@@ -332,12 +455,12 @@ import qualified Data.List.Utils as U
 newtype SortedBy o a = SortedBy a
 instance The (SortedBy o a) a
   
-sortBy :: Named comp (a -> a -> Ordering)
+sortBy :: ((a -> a -> Ordering) ~~ comp)
        -> [a]
        -> SortedBy comp [a]
 sortBy comp xs = coerce (L.sortBy (the comp) xs)
 
-mergeBy :: Named comp (a -> a -> Ordering)
+mergeBy :: ((a -> a -> Ordering) ~~ comp)
         -> SortedBy comp [a]
         -> SortedBy comp [a]
         -> SortedBy comp [a]
@@ -351,7 +474,7 @@ import Named
 main = do
   xs <- readLn :: IO Int
   ys <- readLn
-  name (>) $ \gt -> do
+  name (comparing Down) $ \gt -> do
     let xs' = sortBy gt xs
         ys' = sortBy gt ys
     print (the xs', the ys', the (mergeBy gt xs' ys'))
@@ -366,7 +489,7 @@ main = do
 
 \begin{figure}
   \inputminted{haskell}{named.hs}
-  \caption{A module for attaching ghostly names to values.}
+  \caption{A module for attaching ghostly names to values.\label{name-module}}
 \end{figure}
 
 \begin{figure}
@@ -374,7 +497,7 @@ main = do
   \caption{Usage example}
   \end{figure}
 Clients of the library are somewhat more restricted, in the sense that they cannot create a
-value of type \texttt{OrderedBy comp t} without going through the library's public API.
+value of type \texttt{SortedBy comp t} without going through the library's public API.
 
 \begin{minted}{haskell}
 minimum_O1 :: SortedBy comp [a] -> Maybe a
@@ -383,25 +506,25 @@ minimum_O1 xs = case (the xs) of
     (x:_) -> Just x
 \end{minted}
 
-\subsection{Conjuring a name}
+\subsection{The danger of naming a ghost}
 
 Finally, for the user to be able to \emph{use} this library, there must be a way for
 them to create \texttt{Named} values from normal values. The library must export a
 function similar to this:
 
-\begin{lstlisting}
-name :: a -> (forall name. Named name a -> t) -> t
+\begin{minted}{haskell}
+name :: a -> (forall name. (a ~~ name) -> t) -> t
 name x k = k (coerce x)
-\end{lstlisting}
+\end{minted}
 
 This function is quite similar to \texttt{sizing} from the previous section, and the rank-2
 type gives it a bit of an ominous feel. You might wonder: why not just have a function
 with a simple type like this?
 
-\begin{lstlisting}
-any_name :: a -> Named name a
+\begin{minted}{haskell}
+any_name :: a -> (a ~~ name)
 any_name = coerce
-\end{lstlisting}
+\end{minted}
 
 The crux of the issue is all about \emph{who gets to choose} what \texttt{name} will be.
 In the signature of \texttt{any\_name}, the \emph{caller} gets to select the types \texttt{a}
@@ -410,9 +533,11 @@ and \texttt{name}. In particular, they can attach any name they would like!
 If that still does not sound so bad, consider this code:
 
 \begin{minted}{haskell}
-up, down :: Named () (Int -> Int -> Ordering)
-up   = any_name (<)
-down = any_name (>)
+data Simon
+  
+up, down :: (Int -> Int -> Ordering) ~~ Simon
+up   = any_name compare
+down = any_name (comparing Down)
 
 list1 = sortBy up   [1,2,3]
 list2 = sortBy down [1,2,3]
@@ -420,17 +545,21 @@ list2 = sortBy down [1,2,3]
 merged = the (mergeBy up list1 list2) :: [Int]
 -- [1,2,3,3,2,1]
 \end{minted}
+\noindent
+The user has decided to name two different functions \texttt{Simon}, subverting the
+guarantees offered by the API of the \texttt{Sorted} module. It is dangerous to
+name a ghost!
 
 Now compare to the analogous program, using \texttt{name} instead of \texttt{any\_name}:
 \begin{minted}{haskell}
-name (<) $ \up ->
-  name (>) $ \down ->
+name compare $ \up ->
+  name (comparing Down) $ \down ->
     let list1 = sortBy up   [1,2,3]
         list2 = sortBy down [1,2,3]
     in the (mergeBy up list1 list2)
 \end{minted}
-
-resulting in a compile-time error:
+\noindent
+This results in a compile-time error:
 
 \begin{lstlisting}
   • Couldn't match type "name1" with "name"
@@ -438,31 +567,37 @@ resulting in a compile-time error:
     Expected type: SortedBy name [Integer]
       Actual type: SortedBy name1 [Integer]
 \end{lstlisting}
+\noindent
+The critical difference is that a user of the library is not allowed to create a named
+value by fiat. Instead, they are only allowed to \emph{consume} a named value, by
+provide a polymorphic function that can work with \emph{any} named value. The library's API provides the helper function--in this case, \texttt{name}--for applying the consumer to a normal, unnamed value. In practice, it is as if the
+library has a secret supply of names, and selects one to use in a manner that is not
+predictable (or even inspectable!) to the user.
 
-A general rule of thumb for library authors is: \emph{a ghost should not appear in the return type,
-  unless it also appears in an argument's type}. This simple rule ensures that
+A general rule of thumb for library authors is:
+\emph{a ghost should not appear in the return type,  unless it also appears in an argument's type}. This simple rule ensures that
 the user of the library will not be allowed to materialize ghosts out of thin air.
 
 \section{Case Study \#2: \texttt{Maybe}-free lookup in containers}
 
 \begin{filecontents*}{justified.hs}
-newtype JMap φ k v = JMap (Map k v)
+newtype JMap s k v = JMap (Map k v)
     deriving Functor
 
-newtype JKey φ k = Element k
+newtype JKey s k = Element k
 
-instance The (JMap φ k v) (Map k v)
-instance The (JKey φ k)  k
+instance The (JMap s k v) (Map k v)
+instance The (JKey s k)  k
 
-member ::  k -> JMap φ k v -> Maybe (JKey φ k)
+member ::  k -> JMap s k v -> Maybe (JKey s k)
 
-lookup   :: JKey φ k -> JMap φ k v -> v
+lookup   :: JKey s k -> JMap s k v -> v
 
 reinsert
-  :: JKey φ k -> v -> JMap φ k v -> JMap φ k v
+  :: JKey s k -> v -> JMap s k v -> JMap s k v
 
 withMap
-  :: Map k v  -> (forall φ. JMap φ k v -> t) -> t
+:: Map k v  -> (forall s. JMap s k v -> t) -> t
 \end{filecontents*}
 
 \begin{filecontents*}{justified-usage.hs}
@@ -505,7 +640,7 @@ Value in map 3: HELLO
 \subsection{Application: a type for directed graphs}
 
 \begin{minted}{haskell}
-data Neighbors phi = Neighbors
+data Neighbors φ = Neighbors
     { outEdges :: [JKey φ Vertex]
     , inEdges  :: [JKey φ Vertex] }
   
@@ -535,14 +670,15 @@ represents the set of valid keys present in the tree. But instead of wrapping th
 type directly, we will use an index-plus-phantom-proof representation for keys.
 
 \begin{lstlisting}[language=Haskell]
-newtype BST phi k v = BST (Vector (k,v))
-newtype Index phi   = Index Int
+newtype BST φ k v = BST (Vector (k,v))
+newtype Index φ   = Index Int
 
 toBST :: Ord k => Vector (k,v) -> BST phi k v
 
-find   :: Ord k => k -> BST phi k v -> Maybe (Index phi)
-access :: Index phi -> BST phi k v -> (k,v)
+find   :: Ord k => k -> BST φ k v -> Maybe (Index phi)
+access :: Index phi -> BST φ k v -> (k,v)
 \end{lstlisting}
+
 
 \section{Case Study \#3: Encoding arbitrary properties}
 
@@ -601,6 +737,9 @@ nonzero_length_implies_cons eq =
 \end{filecontents*}
 
 \inputminted{haskell}{nzlic.hs}
+
+%\thebibliography
+%% Berkeley, G.: The Analyst, a Discourse Addressed to an Infidel Mathematician (1734).
 
 %% \section{Case Study \#2: A stack-based calculator}
 

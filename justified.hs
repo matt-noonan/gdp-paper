@@ -1,17 +1,17 @@
-newtype JMap φ k v = JMap (Map k v)
+newtype JMap s k v = JMap (Map k v)
     deriving Functor
 
-newtype JKey φ k = Element k
+newtype JKey s k = Element k
 
-instance The (JMap φ k v) (Map k v)
-instance The (JKey φ k)  k
+instance The (JMap s k v) (Map k v)
+instance The (JKey s k)  k
 
-member ::  k -> JMap φ k v -> Maybe (JKey φ k)
+member ::  k -> JMap s k v -> Maybe (JKey s k)
 
-lookup   :: JKey φ k -> JMap φ k v -> v
+lookup   :: JKey s k -> JMap s k v -> v
 
 reinsert
-  :: JKey φ k -> v -> JMap φ k v -> JMap φ k v
+  :: JKey s k -> v -> JMap s k v -> JMap s k v
 
 withMap
-  :: Map k v  -> (forall φ. JMap φ k v -> t) -> t
+:: Map k v  -> (forall s. JMap s k v -> t) -> t
