@@ -1,3 +1,5 @@
+member :: Ord k => k -> MapK s k v -> Maybe (k {$\in$} s)
+
 newtype JMap s k v = JMap (Map k v)
     deriving Functor
 

@@ -2,9 +2,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE FlexibleContexts      #-}
 
 module Named
-  ( Named, type (~~), name
+  ( type (~~), name
+  , Defn, Defining, define
   ) where
 
 import The
@@ -16,3 +19,12 @@ type a ~~ name = Named name a
 
 name :: a -> (forall name. (a ~~ name) -> t) -> t
 name x k = k (coerce x)
+
+-----------------------------------------------------------
+
+data Defn
+
+type Defining t = (Coercible t Defn, Coercible Defn t)
+
+define :: Defining x => a -> (a ~~ x)
+define = coerce
