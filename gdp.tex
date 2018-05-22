@@ -189,6 +189,37 @@ multi-channel, radio interference, time synchronization}
 
 \section{Introduction}
 
+One practical benefit of a powerful type
+system is the ability to enforce sophisticated program
+invariants at compile time. *** mention dependent types,
+refinement types.
+
+In the context of API design, Microsoft program manager
+Rico Mariani coined the dual terms ``pit of despair'' and
+``pit of success''. A pit is easy to fall into; APIs that
+make it easy to do the wrong thing have a ``pit of despair'';
+conversely, APIs that make it easy to do the \emph{right} thing
+have a ``pit of success''. For example, an API ***
+
+\begin{quote}
+  [Rico] admonished us to think about how we can build platforms that lead developers to write great, high performance code such that developers just fall into doing the "right thing". That concept really resonated with me. It is the key point of good API design. We should build APIs that steer and point developers in the right direction.
+\end{quote}
+
+What is the root cause of this frustration that drives
+well-intentioned programmers towards 
+
+
+For example, a recent snapshot of \texttt{hackage}
+reveals over 2000 instances where the partial function
+\texttt{fromJust} is applied to the
+result of \texttt{Data.Map}'s \texttt{lookup}. Each one
+records the moment a programmer fell into a pit of despair:
+they have somehow reasoned that a certain key must be
+present in the map, but were given no mechanism for
+\emph{communicating} that reasoning to the
+\texttt{Data.Map} API. To escape the pit, they made the
+pragmatic---but unsafe---decision to introduce partiality.
+
 \section{Warm-up: Faux dependent types}
 
 \begin{filecontents*}{ex1.hs}  
@@ -423,7 +454,8 @@ same :: (a ~~ name) -> (a ~~ name) -> IO ()
 same _ _ = putStrLn "same! (but you already knew that)"
 \end{minted}
 Since the \texttt{Named} module does not provide any mechanism for transferring
-a name from one value to another, ****
+a name from one value to another, the \texttt{same} function can only be invoked
+by passing the same value to both parameters.
 
 Still less useful, these two functions cannot be invoked at all:
 \begin{minted}{haskell}
