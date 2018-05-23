@@ -796,6 +796,38 @@ One approach to providing custom tactics is to leverage \texttt{GHC}'s support f
 \emph{type-checker plugins}. These plugins hook into \texttt{GHC}'s $\textsf{OutsideIn}(X)$
 inference algorithm, extending the algorithm's capabilities.
 
+As a proof-of-concept, we developed a simple typechecker plugin that implements
+proof by analytic tableaux. This tactic can verify the satisfiability of any
+valid formula of propositional logic; the na\"ive implementation takes about
+60 lines of Haskell, plus another 150 to hook the tableaux solver into
+$\textsf{OutsideIn}(X)$.
+
+To trigger the custom tactic, we introduce an empty injective type family---hidden
+from the user---and a single exported function \texttt{tableaux}.
+\begin{minted}{haskell}
+type family ProofByTableaux p = p' | p' -> p
+
+tableaux :: ProofByTableaux p
+tableaux = error "proof by analytic tableaux."
+\end{minted}
+Morally, we want to think of \texttt{ProofByTableaux p} as an alias for \texttt{p}.
+By introducing it as an empty type family, we will give our type checker plugin a
+********
+
+The type-checker plugin will get a chance to intervene whenever \texttt{GHC}
+attempts to solve a type equality constraint of the form \texttt{ProofByTableaux p $\sim$ p'}.
+When such a constraint is met, the plugin performs the following tasks:
+\begin{enumerate}
+\item Convert the \emph{type} \texttt{p'} to a \emph{formula} $\Phi$ in propositional
+  logic, introducing free variables for any subterms that are not build from the
+  propositional logic type constructors \texttt{And}, \texttt{Or}, and so on.
+\item Invoke the solver for analytic tableaux, attempting to find an assignment of truth
+  values to variables such that $\neg \Phi$ is true.
+\item If the solver finds such a truth assignment, report an error: the user asked us
+  to apply the tactic to prove a proposition, but that proposition is actually \emph{false}.
+\item If the solver finds that no such truth assignment exists, then we have proven that
+  $\Phi$ is valid. Tell \texttt{GHC} to discharge the constraint \texttt{ProofByTableaux p $\sim$ p'}, replacing it with \texttt{p $\sim$ p'}.
+\end{enumerate}
 %\thebibliography
 %% Berkeley, G.: The Analyst, a Discourse Addressed to an Infidel Mathematician (1734).
 

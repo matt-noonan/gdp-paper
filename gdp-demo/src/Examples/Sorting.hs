@@ -37,15 +37,21 @@ test = mp tableaux
 test3 :: ( ((p `Or` q) `And` (p `Or` r)) `Impl` (p `Or` (q `And` r))) `And` ((p `Or` (q `And` r)) `Impl` ((p `Or` q) `And` (p `Or` r)))
 test3 = tableaux
 
-type x && y = And x y
+type p && q = And p q
+type p || q = Or p q
+type p --> q = Impl p q
+
 infixr 3 &&
-
-type x || y = Or x y
 infixr 2 ||
-
-type x --> y = Impl x y
 infixr 1 -->
 
-  
-type x <-> y = (x --> y) && (y --> x)
-infixr 1 <->
+data Proof p = QED deriving (Functor, Applicative, Monad)
+
+factor_or :: ((p `Or` q) `And` (p `Or` r)) `Impl` (p `Or` (q `And` r))
+factor_or = tableaux
+
+factor_or :: (p || q) && (p || r) --> (p || (q && r))
+factor_or = tableaux
+
+factor_or :: (p || q) && (p || r) -> Proof (p || (q && r))
+factor_or = f
