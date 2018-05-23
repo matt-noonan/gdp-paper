@@ -778,6 +778,24 @@ nonzero_length_implies_cons eq =
 
 \inputminted{haskell}{nzlic.hs}
 
+\subsection{Adding proof tactics}
+
+For simple properties, the task of writing a proof is not too difficult. But for
+more sophisticated properties, the deployment of \emph{proof tactics} becomes
+critical. A proof tactic is a search strategy for proofs, usually targeted at
+proving theorems of a certain shape. For example, the \texttt{Coq} tactic
+\texttt{omega} is useful for proving theorems about arithmetic, while
+\texttt{simpl} is useful for simplifying a complex goal.
+
+Tactics are often designed with a specific domain in mind; to be most useful,
+theory creators (and library authors) should be able to create their own tactics
+when needed. For example, a library dealing extensively with fixed-width numeric types
+may benefit from specific proof tactics based around the theory of bitvectors.
+
+One approach to providing custom tactics is to leverage \texttt{GHC}'s support for
+\emph{type-checker plugins}. These plugins hook into \texttt{GHC}'s $\textsf{OutsideIn}(X)$
+inference algorithm, extending the algorithm's capabilities.
+
 %\thebibliography
 %% Berkeley, G.: The Analyst, a Discourse Addressed to an Infidel Mathematician (1734).
 
