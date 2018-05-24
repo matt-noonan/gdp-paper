@@ -1,6 +1,5 @@
 nonzero_length_implies_cons
-  :: (Length xs == Succ n)
-  -> Proof (IsCons xs)
+  :: (Length xs == Succ n) -> Proof (IsCons xs)
 
 nonzero_length_implies_cons eq =
   do  toSpec length

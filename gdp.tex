@@ -763,8 +763,7 @@ access :: Index phi -> BST φ k v -> (k,v)
 
 \begin{filecontents*}{nzlic.hs}
 nonzero_length_implies_cons
-  :: (Length xs == Succ n)
-  -> Proof (IsCons xs)
+  :: (Length xs == Succ n) -> Proof (IsCons xs)
 
 nonzero_length_implies_cons eq =
   do  toSpec length
@@ -799,8 +798,8 @@ inference algorithm, extending the algorithm's capabilities.
 As a proof-of-concept, we developed a simple typechecker plugin that implements
 proof by analytic tableaux. This tactic can verify the satisfiability of any
 valid formula of propositional logic; the na\"ive implementation takes about
-60 lines of Haskell, plus another 150 to hook the tableaux solver into
-$\textsf{OutsideIn}(X)$.
+60 lines of Haskell, plus another 150 lines for the plugin that mediates between
+the tableaux solver and $\textsf{OutsideIn}(X)$.
 
 To trigger the custom tactic, we introduce an empty injective type family---hidden
 from the user---and a single exported function \texttt{tableaux}.
@@ -819,195 +818,45 @@ attempts to solve a type equality constraint of the form \texttt{ProofByTableaux
 When such a constraint is met, the plugin performs the following tasks:
 \begin{enumerate}
 \item Convert the \emph{type} \texttt{p'} to a \emph{formula} $\Phi$ in propositional
-  logic, introducing free variables for any subterms that are not build from the
+  logic, introducing free variables for any subterms that are not built from the
   propositional logic type constructors \texttt{And}, \texttt{Or}, and so on.
 \item Invoke the solver for analytic tableaux, attempting to find an assignment of truth
   values to variables such that $\neg \Phi$ is true.
 \item If the solver finds such a truth assignment, report an error: the user asked us
-  to apply the tactic to prove a proposition, but that proposition is actually \emph{false}.
+  to apply the tactic to prove $\Phi$, but the variable assignment demonstrated that
+  $\Phi$ is actually \emph{false}.
 \item If the solver finds that no such truth assignment exists, then we have proven that
   $\Phi$ is valid. Tell \texttt{GHC} to discharge the constraint \texttt{ProofByTableaux p $\sim$ p'}, replacing it with \texttt{p $\sim$ p'}.
 \end{enumerate}
-%\thebibliography
-%% Berkeley, G.: The Analyst, a Discourse Addressed to an Infidel Mathematician (1734).
+For the user, the effect appears to be that \texttt{tableaux} can act as a value of
+type \texttt{p} whenever \texttt{p} is a valid formula in propositional logic.
 
-%% \section{Case Study \#2: A stack-based calculator}
-
-%% In this case study, we investigate how the GDP technique can be used to
-%% acheive some of the safety and expressivity features of dependent types,
-%% within a system that only supports non-dependent types.
-
-%% To showcase the method, we will develop a library for carrying out computations
-%% with a stack-based calculator. The basic state of the calculator will be
-%% represented as a stack of \texttt{Double}s, but we will also introduce a
-%% phantom parameter: the ghost of the stack's size.
-
-%% \begin{lstlisting}[language=Haskell]
-%%   newtype Stack $nu$ = Stack [Double]
-%% \end{lstlisting}
-
-%% We also introduce a type constructor \texttt{S} with the intention that
-%% if $\nu$ represents a stack of height $n$, then $\texttt{S } \nu$ represents
-%% a stack of height $n + 1$. Since \texttt{S} is only supposed to be applied
-%% to phantom types, there is no need for any type of the form \texttt{S t} to
-%% be inhabited. As a result, we can use an empty data declaration:
-%% \begin{lstlisting}[language=Haskell]
-%%   data S $nu$    -- empty data declaration, an uninhabitable type
-%% \end{lstlisting}
-%% The safe stack operations can then be encoded:
-%% \begin{lstlisting}[language=Haskell]
-%%   pushStack :: Double -> Stack $nu$ -> Stack (S $nu$)
-%%   pushStack x (Stack stk) = Stack (x:xs)
-
-%%   popStack :: Stack (S $nu$) -> (Double, Stack $nu$)
-%%   popStack (Stack (x:xs)) = (x, Stack xs)
-%%   popStack (Stack []) = error "the spirits have been violated"
-%% \end{lstlisting}
-%% Finally, we should provide a method for generating ghosts:
-%% \begin{lstlisting}[language=Haskell]
-%%   testStack :: Stack $nu$ -> (forall $mu$. Maybe (Stack (S $mu$)) -> t) -> t
-%%   testStack stack action = action $ case stack of
-%%       Stack (_:_) -> Just (coerce stack)
-%%       _           -> Nothing
-%% \end{lstlisting}
-
-%% \subsection{Impredicativity}
-%% There is an interesting issue related to impredacative types that can be seen
-%% in the encoding of \texttt{testStack}. First, \texttt{testStack} should take a
-%% general stack as input, and either reify the fact that there is at least one
-%% element, or result in \texttt{Nothing}. So the natural type to expect is
-%% \[\texttt{Stack } \nu \to \texttt{Maybe } (\exists \mu.~ \texttt{Stack } (\texttt{S } \mu)).\]
-%% But a straightforward encoding as a rank-2 type with universal quantification leads to
-%% \[\texttt{Stack } \nu \to \texttt{Maybe } ((\forall \mu.~ \texttt{Stack } (\texttt{S } \mu) \to t) \to t).\]
-%% *****
-%% Instead, we have to use the weaker encoding
-%% \[\texttt{Stack } \nu \to \exists \mu.~ \texttt{Maybe } (\texttt{Stack } (\texttt{S } \mu)),\]
-%% corresponding to the rank-2 type
-%% \[\texttt{Stack } \nu \to (\forall \mu.~ \texttt{Maybe } (\texttt{Stack } (\texttt{S } \mu)) \to t) \to t.\]
-
-%% \begin{lstlisting}[language=Haskell]
-%%   iget :: IxMonadStateT m p p p
-%%   iput :: q -> IxMonadStateT m p q ()
-%%   imodify :: (p -> q) -> IxMonadStateT m p q ()
-
-%%   return :: a -> IxMonadStateT m p p a
-%%   (>>=) :: IxMonadStateT m p q a -> (a -> IxMonadStateT m q r b) -> IxMonadStateT m p r b
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%%   type StackOp $nu$ $mu$ t = IxMonadStateT IO (Stack $nu$) (Stack $mu$) t
-
-%%   push :: Double -> StackOp $nu$ (S $nu$) ()
-%%   push x = imodify (pushStack x)
+\begin{filecontents*}{tableaux.hs}
+proof1, proof2 :: Proof (p {$\wedge$} q --> p {$\vee$} q)
   
-%%   pop :: StackOp (S $nu$) $nu$ Double
-%%   pop = do
-%%     stack <- iget
-%%     let (top, rest) = popStack stack
-%%     iput rest
-%%     return top
-%% \end{lstlisting}
+proof1 =  and_elimL
+       |. or_introL
+       |\ impl_intro
 
-%% \section{Case Study \#3: Liquid Haskell inside}
+proof2 = tableaux
+\end{filecontents*}
 
-%% \section{Case Study \#4: Ghosts of dependent types}
-
-%% \begin{lstlisting}[language=Haskell]
-%%   data S $nu$
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%%   pf_commutes :: Plus n m -> Plus m n
-%%   pf_assocL   :: Plus a (Plus b c) -> Plus (Plus a b) c
-%%   pf_assocR   :: Plus (Plus a b) c -> Plus a (Plus b c)
-%%   pf_ident    :: Plus n Z -> n
-%%   pf_destruct :: n -> Either (n :=: Z) (n :=: S m)
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%%   push :: a -> Stack n a -> Stack (S n) a
-%%   pop  :: Stack (S n) a -> (a, Stack n a)
-%%   test :: Stack n a -> Either (Stack Z) (Stack (S m))
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%%   opAdd :: Stack (S (S n)) -> Stack (S n)
-%%   opAdd stack = push (x + y) stack''
-%%     where
-%%       (x, stack')  = pop stack
-%%       (y, stack'') = pop stack'
-%% \end{lstlisting}
+\begin{figure}
+  \inputminted{haskell}{tableaux.hs}
+  \caption{Custom proof tactics can be implemented as type-checker plugins and
+    included with libraries. Here, a proof requirement is discharged in two ways:
+    once by hand, and then again by appeal to the \texttt{tableaux} plugin.
+    \label{tableaux-example}}
+\end{figure}
 
 
-%% \begin{lstlisting}[language=Haskell]
-%%   data Column rho
-%%   data Row kappa
-%%   data Matrix rho kappa
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%% class Euclidean v where
-%%   (.+.) :: v -> v -> v
-%%   (**)  :: Double -> v -> v
-%%   zero  :: v
-%%   type family Transposed :: *
-%%   transpose :: v -> vT
-
-
-%% instance Euclidean (Col kappa) where
-%%   (Col v1) .+. (Col v2) = Col (v1 Vector.(.+.) v2)
-%%   zero = Col (Vector.zero)
-%%   type Transposed (Col kappa) = Row kappa
-%%   transpose = coerce
-
-%% instance Euclidean (Row rho) where
-%%   (Row v1) .+. (Row v2) = Row (v1 Vector.(.+.) v2)
-%%   zero = Row (Vector.zero)
-%%   type Transposed (Row rho) = Col rho
-%%   transpose = coerce
-
-%% instance Euclidean (Matrix rho kappa) where
-%%   type Transposed (Matrix rho kappa) = Matrix kappa rho
-%%   transpose (Matrix m) = Matrix (V.tranpose m)
+%% \begin{thebibliography}{10}
+%%   \softraggedright
   
-%% transpose :: Matrix rho kappa -> Matrix kappa rho
-%% (.+.) :: Matrix rho kappa -> Matrix rho kappa -> Matrix rho kappa
-%% (.*.) :: Matrix rho kappa -> Matrix kappa gamma -> Matrix rho gamma
-%% (*.) :: Matrix rho kappa -> Column rho -> Column kappa
-%% (.*) :: Row kappa -> Matrix rho kappa -> Row rho
-%% inner :: Row kappa -> Col kappa -> Double
-%% outer :: Col kappa -> Row rho   -> Matrix rho kappa
-
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%% dimRow :: Vector Double -> (forall rho. Row rho -> t) -> t
-%% dimCol :: Vector Double -> (forall kappa. Col kappa -> t) -> t
-%% dimMat :: Matrix Double -> (forall rho kappa. Mat rho kappa -> t) -> t
-
-%% alignRow :: Row rho -> Row rho' -> Maybe (rho <~> rho')
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%% phi :subsetX: phi' = ProperSubset
-%%   { pf_subset   :: Vertex phi -> Vertex phi'
-%%   , pf_newvtx   :: Vertex phi'
-%%   , pf_classify :: Vertex phi' -> Maybe (Vertex phi)
-%%   }
-%% \end{lstlisting}
-
-%% \begin{lstlisting}[language=Haskell]
-%% coerceWith :: (a ~> b) -> (a -> b)
-
-%% coerceToR :: (a <~> b) -> (a -> b)
-%% coerceToL :: (a <~> b) -> (b -> a)
-
-%% phi :subsetX: phi' = ProperSubset
-%%   { pf_subset   :: Vertex phi ~> Vertex phi'
-%%   , pf_newvtx   :: Vertex phi'
-%%   , pf_classify :: Vertex phi' -> Maybe (Vertex phi)
-%%   }
-%% \end{lstlisting}
+%% \bibitem[Berkeley (1734) Berkeley]{analyst}
+%%   G. Berkeley. \newblock The Analyst, a Discourse ADdressed to an Infidel Mathematician.
+%%   \newblock 1734.
+%% \end{thebibliography}
 
 
 \end{document}
