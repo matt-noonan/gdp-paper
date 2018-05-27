@@ -608,7 +608,9 @@ This results in a compile-time error:
 \noindent
 The critical difference is that a user of the library is not allowed to create a named
 value by fiat. Instead, they are only allowed to \emph{consume} a named value, by
-provide a polymorphic function that can work with \emph{any} named value. The library's API provides the helper function--in this case, \texttt{name}--for applying the consumer to a normal, unnamed value. In practice, it is as if the
+provide a polymorphic function that can work with \emph{any} named value. The library's API provides
+a helper function---in this case, \texttt{name}---for applying the consumer to a normal, unnamed value.
+In practice, it is as if the
 library has a secret supply of names, and selects one to use in a manner that is not
 predictable (or even inspectable!) to the user.
 
