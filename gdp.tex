@@ -220,6 +220,70 @@ present in the map, but were given no mechanism for
 \texttt{Data.Map} API. To escape the pit, they made the
 pragmatic---but unsafe---decision to introduce partiality.
 
+\subsection{Common idioms for handling pre-conditions}
+
+No matter the language, a programmer often has to write functions
+that place constraints on their input. For example, the venerable
+\texttt{head} function for extracting the first element of a list
+asks its users to only hand it a non-empty list to operate on.
+
+
+\subsubsection{Run-time failure on bad inputs}
+Often the simplest approach is
+  to have a function simply fail on malformed inputs. The failure can
+  be a run-time error (as in Haskell's \texttt{head}), or result in
+  undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
+  
+\subsubsection{Returning a dummy value}
+  To avoid run-time errors, some APIs may have a ``dummy value''
+  for indicating the result of a failed operation. For example, Common Lisp's
+  \texttt{car} and \texttt{golang}'s \texttt{Front()} both return \texttt{nil}
+  when passed an empty list. The caller must explicitly check for this dummy
+  value; other contortions may be needed if the container is also allowed to
+  hold \texttt{nil}, to disambiguate between ``the input list was empty'' and
+  ``\texttt{nil} is the first element of this list''.
+
+\subsubsection{Returning a value with an option type}
+  A similar ``dummy value'' strategy
+  for languages with stricter typing discipline is to use an ``option type'' such
+  as Haskell's \texttt{Maybe} or Scala's \texttt{Option}. A value of type \texttt{Maybe a}
+  cannot be used where a value of type \texttt{a} was expected, so the user must
+  explicitly pattern match on the optional value to extract the result and handle the
+  error case. This approach may lead to frustration when the user believes that the
+  error case is not possible.
+  
+\subsubsection{Modifying input types to exclude bad inputs}
+Finally, the API designer may select more restrictive types for the inputs in order
+to make the function total. For example, some Haskell libraries make use of the
+\texttt{NonEmpty} type for lists that contain at least one element. The \texttt{head}
+function then becomes total. Rather than handling a failure case, the user only
+needs to prove that their list is non-empty by making use of the smart constructor
+\texttt{nonEmpty :: [a] -> Maybe (NonEmpty a)}.
+
+\subsection{Ghosts of Departed Proofs}
+The ``return-an-optional-value'' idiom is well-known in the functional programming world.
+The author of a library function that returns \texttt{Maybe a} can certainly sleep well
+at night, content in the knowledge that their function will never cause a run-time error.
+
+But what about the \emph{users} of that library? Has the library author helped the user stay
+on a virtuous path, or have they led the user into temptation?
+
+In fact, the author of the library has just pushed extra responsiblity onto the user.
+Every time the user applies a function that uses the optional-return idiom, they are obligated
+to test the return value and handle the error case. This remains true, even if the user
+has \emph{correctly} ensured that the function's preconditions have been met! The library
+author sleeps well while even the most cautious users toil against those impossible error cases.
+
+No wonder, then, that so many well-meaning users reach for unsafe functions like \texttt{fromJust}!
+They have already proved (to their own satisfaction) that the function is being used properly, so they rightly
+feel justified in ignoring the error case entirely. But now we see how the user has been led into
+a pit of despair: they have ended up with a program that is \emph{exactly as fragile} as one where the library
+author had used the run-time-failure idiom!\footnote{In fact, things are slightly worse: we have also introduced a little
+bit of extra allocation and indirection for creating and unpacking the return value in the non-error case.}
+
+In this paper, we will use a series of case studies to show how library authors can write
+functions that can ensure certain pre-conditions are met, without the 
+
 \section{Warm-up: Faux dependent types}
 
 \begin{filecontents*}{ex1.hs}  
