@@ -220,6 +220,63 @@ present in the map, but were given no mechanism for
 \texttt{Data.Map} API. To escape the pit, they made the
 pragmatic---but unsafe---decision to introduce partiality.
 
+\begin{filecontents*}{idioms.hs}
+--------------------------------------------------------
+-- Unsafe API using non-total functions.
+
+head :: [a] -> a
+head xs = case xs of
+  (x:_) -> x
+  []    -> error "empty list!"
+
+endpts = do
+  putStrLn "Enter a non-empty list of integers:"  
+  xs <- readLn
+  if xs /= [] then return (head xs, head $ reverse xs)
+              else endpts
+
+--------------------------------------------------------
+-- Returning Maybe / Optional values. Safe, but requires
+-- the caller to pattern-match on the Maybe at every use,
+-- even when the list is known to be non-empty.
+
+safeHead :: [a] -> Maybe a
+safeHead xs = case xs of
+  (x:_) -> Just x
+  []    -> Nothing
+
+safeEndpts = do
+  putStrLn "Enter a non-empty list of integers:"  
+  xs <- readLn
+  case (safeHead xs, safeHead $ reverse xs) of
+    (Just x, Just y) -> return (x, y)
+     _               -> safeEndpts
+
+-------------------------------------------------------
+-- "Ghosts of Departed Proofs". Safe. Does not return
+-- an optional value; preconditions are checked early
+-- and represented in phantom type parameters.
+
+gdpHead :: List NonZero a -> a
+gdpHead xs = case the xs of
+  (x:_) -> x
+  []    -> error "unreachable"
+
+gdpEndpts = do
+  putStrLn "Enter a non-empty list of integers:"  
+  xs <- readLn
+  case classify xs of
+    Right xs -> return (gdpHead xs, gdpHead $ gdpReverse xs)
+    Left  _  -> gdpEndpts
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{idioms.hs}
+  \caption{Idioms for implementing the
+    \texttt{head} function, along with usage examples.
+  For the definitions of \texttt{ifNonEmpty}, }
+\end{figure}
+
 \subsection{Common idioms for handling pre-conditions}
 
 No matter the language, a programmer often has to write functions
@@ -239,7 +296,7 @@ Often the simplest approach is
   for indicating the result of a failed operation. For example, Common Lisp's
   \texttt{car} and \texttt{golang}'s \texttt{Front()} both return \texttt{nil}
   when passed an empty list. The caller must explicitly check for this dummy
-  value; other contortions may be needed if the container is also allowed to
+  value. Other contortions may be needed if the container is also allowed to
   hold \texttt{nil}, to disambiguate between ``the input list was empty'' and
   ``\texttt{nil} is the first element of this list''.
 
@@ -355,15 +412,30 @@ In \cref{dot-product}, note that the error handler for mismatched list sizes hap
 is actually invoked, the programmer has already provided evidence that the operation is
 safe, in the form of the phantom type parameters on \texttt{xs'} and \texttt{ys'}.
 
-\subsection{Manipulating sizes}
+\subsection{A feint towards dependent types}
+So far, the \texttt{Sized} API allows us to assert that two lists are known to have the same
+length, and to introduce an existentially-quantified (but unknown) size for a ``regular'' list.
+As the authors of the \texttt{Sized} module, we can introduce more interesting variations as
+well. For example, we could types that represent a length of zero, or an even length, or the
+sum of two other lenghts, or an infinite length; indeed, any class of lengths that we
+think the user might want.
 
 \begin{minted}{haskell}
 data Zero
+data NonZero
 data Add x y
 
 nil :: Size Zero [a]
 nil = Size []
 
+gdpHead :: List NonZero a -> a
+gdpHead xs = head (the xs) -- safe!
+
+classify :: [a] -> Either (List Zero a) (List NonZero a)
+classify xs = case xs of
+  []    -> Left  (coerce xs)
+  (_:_) -> Right (coerce xs)
+  
 (+++) :: Size n [a] -> Size m [a] -> Size (Add n m) [a]
 xs +++ ys = coerce (the xs ++ the ys)
 
@@ -374,13 +446,30 @@ add_commutes :: Size (Add n m) a -> Size (Add m n) a
 add_commutes = coerce
 \end{minted}
 
+Except in the simplest of cases, it is important that the library author equip the
+user with a selection of \emph{proof combinators} for changing the shape of the
+property captured by the phantom type parameter. In ****, \texttt{zero\_neutral}
+and \texttt{add\_commutes} are proof combinators that allow the user to convert
+evidence from one form to another.
 
 \begin{minted}{haskell}
+head' :: List NonZero a -> a
+head' xs = gdpHead (ok $ nil +++ xs)
+  where
+    ok = zero_neutral
+
 norm2 :: Size n [Double] -> Double
 norm2 xs = dot xs (ok $ xs +++ nil)
   where
     ok = zero_neutral . add_commutes
 \end{minted}
+
+*** It is not so bad to introduct a \texttt{NonEmpty} type for lists, but it
+would be intractable to add \texttt{EvenSizedList}, \texttt{InfiniteList},
+\texttt{EmptyList}, and so on. Each library function would need a variant
+for each new type, or else a carefully curated collection of typeclasses would
+be needed to provide \emph{ad hoc} overloading. By contrast, the GDP approach
+allows the same library functions on a wide variety of *******.
 
 \subsection{Infinite lists}
 
