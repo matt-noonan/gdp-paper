@@ -2,23 +2,23 @@
 module Sized
   (Size, the, sZipWith, sizing, align) where
 
-newtype Size n a = Size a
+newtype List n a = List a
 
-the :: Size n a -> a
-the (Size x) = x
+the :: List n a -> a
+the (List x) = x
 
 sZipWith :: (a -> b -> c)
-         -> Size n [a]
-         -> Size n [b]
-         -> Size n [c]
+         -> List n a
+         -> List n b
+         -> List n c
 sZipWith f xs ys =
-  Size (zipWith f (the xs) (the ys))
+  List (zipWith f (the xs) (the ys))
 
-sizing :: [a] -> (forall n. Size n [a] -> t) -> t
-sizing xs k = k (Size xs)
+sizing :: [a] -> (forall n. List n a -> t) -> t
+sizing xs k = k (List xs)
 
-align :: Size n [a] -> [b] -> Maybe (Size n [b])
+align :: List n a -> [b] -> Maybe (List n b)
 align xs ys = if length (the xs) == length ys
-              then Just (Size ys)
+              then Just (List ys)
               else Nothing
 

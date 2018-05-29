@@ -3,4 +3,4 @@ class The d a | d -> a where
     default the :: Coercible d a => d -> a
     the = coerce
 
-instance The (Size n a) a
+instance The (List n a) a

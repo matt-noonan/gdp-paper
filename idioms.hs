@@ -43,5 +43,5 @@ gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"
   xs <- readLn
   case classify xs of
-    Right xs -> return (gdpHead xs, gdpHead $ gdpReverse xs)
+    Right xs -> return (gdpHead xs, gdpHead $ gdpRev xs)
     Left  _  -> gdpEndpts

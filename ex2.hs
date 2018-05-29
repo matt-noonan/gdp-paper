@@ -1,6 +1,6 @@
 import Sized
 
-dot :: Size n [Double] -> Size n [Double] -> Double
+dot :: List n Double -> List n Double -> Double
 dot xs ys = sum (the $ sZipWith (*) xs ys)
 
 main :: IO ()
@@ -9,5 +9,5 @@ main = do
   ys <- readLn
   sizing xs $ \xs' -> do
     case align xs' ys of
-      Nothing  -> putStrLn "Size mismatch!"
+      Nothing  -> putStrLn "List mismatch!"
       Just ys' -> print (dot xs' ys')

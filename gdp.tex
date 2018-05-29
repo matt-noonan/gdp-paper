@@ -266,7 +266,7 @@ gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
   case classify xs of
-    Right xs -> return (gdpHead xs, gdpHead $ gdpReverse xs)
+    Right xs -> return (gdpHead xs, gdpHead $ gdpRev xs)
     Left  _  -> gdpEndpts
 \end{filecontents*}
 
@@ -348,24 +348,24 @@ functions that can ensure certain pre-conditions are met, without the
 module Sized
   (Size, the, sZipWith, sizing, align) where
 
-newtype Size n a = Size a
+newtype List n a = List a
 
-the :: Size n a -> a
-the (Size x) = x
+the :: List n a -> a
+the (List x) = x
 
 sZipWith :: (a -> b -> c)
-         -> Size n [a]
-         -> Size n [b]
-         -> Size n [c]
+         -> List n a
+         -> List n b
+         -> List n c
 sZipWith f xs ys =
-  Size (zipWith f (the xs) (the ys))
+  List (zipWith f (the xs) (the ys))
   
-sizing :: [a] -> (forall n. Size n [a] -> t) -> t
-sizing xs k = k (Size xs)
+sizing :: [a] -> (forall n. List n a -> t) -> t
+sizing xs k = k (List xs)
 
-align :: Size n [a] -> [b] -> Maybe (Size n [b])
+align :: List n a -> [b] -> Maybe (List n b)
 align xs ys = if length (the xs) == length ys
-              then Just (Size ys)
+              then Just (List ys)
               else Nothing
 
 \end{filecontents*}
@@ -373,7 +373,7 @@ align xs ys = if length (the xs) == length ys
 \begin{filecontents*}{ex2.hs}
 import Sized
 
-dot :: Size n [Double] -> Size n [Double] -> Double
+dot :: List n Double -> List n Double -> Double
 dot xs ys = sum (the $ sZipWith (*) xs ys)
 
 main :: IO ()
@@ -382,7 +382,7 @@ main = do
   ys <- readLn
   sizing xs $ \xs' -> do
     case align xs' ys of
-      Nothing  -> putStrLn "Size mismatch!"
+      Nothing  -> putStrLn "List mismatch!"
       Just ys' -> print (dot xs' ys')
 \end{filecontents*}
 
@@ -397,9 +397,10 @@ main = do
 \end{figure}
 
 Despite  appearences, the phantom type parameter $n$ does not really represent the vector's length
-{\em per se}. Instead, we propose to think of \texttt{Size n} as a predicate, and values of
-type \texttt{Size n [a]} as ``lists of type \texttt{[a]}, equipped with a proof
-that they satisfy \texttt{Size n}''. Critically, this proof has no run-time impact: it is trapped in the phantom type parameter, and carried by a \texttt{newtype} wrapper that vanishes in
+{\em per se}. Instead, we propose to think of the phantom type \texttt{p} in \texttt{List p a} as a predicate,
+and values of type \texttt{List n a} as ``lists of type \texttt{[a]}, equipped with a proof
+that they satisfy \texttt{p}''. Critically, this proof has no run-time impact: it is trapped in the
+phantom type parameter, and carried by a \texttt{newtype} wrapper that vanishes in
 the final compilation.
 
 
@@ -425,24 +426,27 @@ data Zero
 data NonZero
 data Add x y
 
-nil :: Size Zero [a]
-nil = Size []
+nil :: List Zero a
+nil = List []
 
 gdpHead :: List NonZero a -> a
 gdpHead xs = head (the xs) -- safe!
+
+gdpRev :: List n a -> List n a
+gdpRev = coerce . reverse . coerce
 
 classify :: [a] -> Either (List Zero a) (List NonZero a)
 classify xs = case xs of
   []    -> Left  (coerce xs)
   (_:_) -> Right (coerce xs)
   
-(+++) :: Size n [a] -> Size m [a] -> Size (Add n m) [a]
+(+++) :: List n a -> List m a -> List (Add n m) a
 xs +++ ys = coerce (the xs ++ the ys)
 
-zero_neutral :: Size (Add Zero n) a -> Size n a
+zero_neutral :: List (Add Zero n) a -> List n a
 zero_neutral = coerce
 
-add_commutes :: Size (Add n m) a -> Size (Add m n) a
+add_commutes :: List (Add n m) a -> List (Add m n) a
 add_commutes = coerce
 \end{minted}
 
@@ -458,7 +462,7 @@ head' xs = gdpHead (ok $ nil +++ xs)
   where
     ok = zero_neutral
 
-norm2 :: Size n [Double] -> Double
+norm2 :: List n Double -> Double
 norm2 xs = dot xs (ok $ xs +++ nil)
   where
     ok = zero_neutral . add_commutes
@@ -476,11 +480,11 @@ allows the same library functions on a wide variety of *******.
 \begin{minted}{haskell}
 data Infinite
 
-omega :: Size Infinite [Int]
-omega = Size [0..]
+omega :: List Infinite Int
+omega = List [0..]
 
-pop :: Size Infinite [a] -> (a, Size Infinite [a])
-pop (Size xs) = (head xs, Size (tail xs))
+pop :: List Infinite a -> (a, List Infinite a)
+pop (List xs) = (head xs, List (tail xs))
 \end{minted}
 
 \begin{filecontents*}{theTC.hs}
@@ -489,7 +493,7 @@ class The d a | d -> a where
     default the :: Coercible d a => d -> a
     the = coerce
     
-instance The (Size n a) a
+instance The (List n a) a
 \end{filecontents*}
 
 \begin{figure}
