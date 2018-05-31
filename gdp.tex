@@ -499,6 +499,13 @@ class The d a | d -> a where
 instance The (List n a) a
 \end{filecontents*}
 
+\subsection{Limitations}
+As alluded to in the section heading, the GDP approach gives us
+types that have \emph{some} of the features of dependent types, but
+they are strictly less powerful. For example, we cannot
+write a dependently-typed \texttt{replicate} function of the form
+\texttt{replicate : (n : $\mathbb{N}$) -> A -> Vec A n}
+
 \begin{figure}
   \inputminted{haskell}{theTC.hs}
   \caption{The \texttt{The} typeclass, for dropping ghosts
@@ -514,7 +521,7 @@ May we not call them Ghosts of Departed Proofs?
 The techniques described in this paper can be applied to many
 situations that traditionally would belong to the domain of
 \emph{dependent types} or \emph{refinement types}. However, the
-GDP approach has a few advantages:
+GDP approach offers a few advantages:
 \begin{itemize}
 \item Only mild extensions to a Damas-Hindley-Milner type system
   ({\it e.g.} rank-2 types, a module system, phantom types) are required to
