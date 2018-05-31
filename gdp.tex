@@ -23,7 +23,7 @@
     baselinestretch=1.2,
     %bgcolor=lightgray,
     fontsize=\footnotesize,
-    escapeinside=\{\}
+    escapeinside=\#\#
     }
 
 \usepackage{filecontents}
@@ -197,8 +197,8 @@ refinement types.
 In the context of API design, Microsoft program manager
 Rico Mariani coined the dual terms ``pit of despair'' and
 ``pit of success''. A pit is easy to fall into; APIs that
-make it easy to do the wrong thing have a ``pit of despair'';
-conversely, APIs that make it easy to do the \emph{right} thing
+make it easy to do the wrong thing lead the user into a ``pit of despair''.
+Conversely, APIs that make it easy to do the \emph{right} thing
 have a ``pit of success''. For example, an API ***
 
 \begin{quote}
@@ -260,7 +260,7 @@ safeEndpts = do
 gdpHead :: List NonZero a -> a
 gdpHead xs = case the xs of
   (x:_) -> x
-  []    -> error "unreachable"
+  []    -> unreachable
 
 gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
@@ -274,7 +274,10 @@ gdpEndpts = do
   \inputminted{haskell}{idioms.hs}
   \caption{Idioms for implementing the
     \texttt{head} function, along with usage examples.
-  For the definitions of \texttt{ifNonEmpty}, }
+    The \texttt{gdpHead} function can only be invoked in
+    a context where the user has already proven that the
+    list is non-empty, combining the simplicity of the
+    first example with the safety of the second.}
 \end{figure}
 
 \subsection{Common idioms for handling pre-conditions}
@@ -285,13 +288,13 @@ that place constraints on their input. For example, the venerable
 asks its users to only hand it a non-empty list to operate on.
 
 
-\subsubsection{Run-time failure on bad inputs}
+\paragraph{Run-time failure on bad inputs.}
 Often the simplest approach is
   to have a function simply fail on malformed inputs. The failure can
   be a run-time error (as in Haskell's \texttt{head}), or result in
   undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
   
-\subsubsection{Returning a dummy value}
+\paragraph{Returning a dummy value.}
   To avoid run-time errors, some APIs may have a ``dummy value''
   for indicating the result of a failed operation. For example, Common Lisp's
   \texttt{car} and \texttt{golang}'s \texttt{Front()} both return \texttt{nil}
@@ -300,7 +303,7 @@ Often the simplest approach is
   hold \texttt{nil}, to disambiguate between ``the input list was empty'' and
   ``\texttt{nil} is the first element of this list''.
 
-\subsubsection{Returning a value with an option type}
+\paragraph{Returning a value with an option type.}
   A similar ``dummy value'' strategy
   for languages with stricter typing discipline is to use an ``option type'' such
   as Haskell's \texttt{Maybe} or Scala's \texttt{Option}. A value of type \texttt{Maybe a}
@@ -309,7 +312,7 @@ Often the simplest approach is
   error case. This approach may lead to frustration when the user believes that the
   error case is not possible.
   
-\subsubsection{Modifying input types to exclude bad inputs}
+\paragraph{Modifying input types to exclude bad inputs.}
 Finally, the API designer may select more restrictive types for the inputs in order
 to make the function total. For example, some Haskell libraries make use of the
 \texttt{NonEmpty} type for lists that contain at least one element. The \texttt{head}
@@ -335,7 +338,7 @@ No wonder, then, that so many well-meaning users reach for unsafe functions like
 They have already proved (to their own satisfaction) that the function is being used properly, so they rightly
 feel justified in ignoring the error case entirely. But now we see how the user has been led into
 a pit of despair: they have ended up with a program that is \emph{exactly as fragile} as one where the library
-author had used the run-time-failure idiom!\footnote{In fact, things are slightly worse: we have also introduced a little
+author had used the run-time-failure idiom!\footnote{In fact, things are slightly \emph{worse}: we have also introduced a little
 bit of extra allocation and indirection for creating and unpacking the return value in the non-error case.}
 
 In this paper, we will use a series of case studies to show how library authors can write
@@ -468,11 +471,11 @@ norm2 xs = dot xs (ok $ xs +++ nil)
     ok = zero_neutral . add_commutes
 \end{minted}
 
-*** It is not so bad to introduct a \texttt{NonEmpty} type for lists, but it
+*** It is not so much effort to introduce a \texttt{NonEmpty} type for lists, but it
 would be intractable to add \texttt{EvenSizedList}, \texttt{InfiniteList},
 \texttt{EmptyList}, and so on. Each library function would need a variant
 for each new type, or else a carefully curated collection of typeclasses would
-be needed to provide \emph{ad hoc} overloading. By contrast, the GDP approach
+be required to provide \emph{ad hoc} overloading. By contrast, the GDP approach
 allows the same library functions on a wide variety of *******.
 
 \subsection{Infinite lists}
@@ -588,8 +591,8 @@ been sorted properly, can we devise a mechanism by which they can convince
 \texttt{mergeBy}?
 
 \subsection{Conjuring a name}
-The first problem that we run into is ``how can we talk about the comparators
-being `the same' ''? In a language that supports equality tests on functions,
+The first problem that meet is how to reflect the notion of two  comparators
+being ``the same''. In a language that supports equality tests on functions,
 you could imagine a solution where the \texttt{sortBy} function returns a sorted
 list along with a reference to the comparator that was used; \texttt{mergeBy} could
 then check that the comparators matched. But this has a run-time cost for carrying
@@ -765,7 +768,7 @@ This results in a compile-time error:
 \noindent
 The critical difference is that a user of the library is not allowed to create a named
 value by fiat. Instead, they are only allowed to \emph{consume} a named value, by
-provide a polymorphic function that can work with \emph{any} named value. The library's API provides
+providing a polymorphic function that can work with \emph{any} named value. The library's API provides
 a helper function---in this case, \texttt{name}---for applying the consumer to a normal, unnamed value.
 In practice, it is as if the
 library has a secret supply of names, and selects one to use in a manner that is not
@@ -775,25 +778,53 @@ A general rule of thumb for library authors is:
 \emph{a ghost should not appear in the return type,  unless it also appears in an argument's type}. This simple rule ensures that
 the user of the library will not be allowed to materialize ghosts out of thin air.
 
+\subsection{Names and the \texttt{ST} monad}
+The trick for conjuring names outside of the user's control by using rank-2 types was
+inspired by the \texttt{ST} monad and the rank-2 \texttt{runST :: (forall s. ST s a) -> a}
+function \cite{launchbury1994lazy}. In fact, some authors have even proposed to think of the \texttt{s} parameter as
+representing a name attached to a region of the heap \citep{timany2017logical}.
+
+Informally, we can think of \texttt{ST s a} as representing a \texttt{State} monad over
+named stores, such as
+\begin{minted}{haskell}
+data Store = Store
+
+type St s = State (Store ~~ s)
+
+runSt :: (forall s. St s a) -> a
+runSt action = name Store (evalState action)
+\end{minted}
+
 \section{Case Study \#2: \texttt{Maybe}-free lookup in containers}
 
-\begin{filecontents*}{justified.hs}
-member :: Ord k => k -> MapK s k v -> Maybe (k {$\in$} s)
+In this section, we will investigate the pit of despair that leads so
+many developers to follow a map lookup by \texttt{fromJust}.
 
-newtype JMap s k v = JMap (Map k v)
+The power of this method becomes more apparent when considering maps where
+the values are expected to reference the keys in some way. For example, a
+simple representation for directed graphs with vertex type \texttt{v} is
+\begin{minted}{haskell}
+type Digraph v = Map v [v]
+\end{minted}
+mapping each vertex to its list of immediate neighbors. Well-formed \texttt{Digraph}s
+should satisfy the property that every vertex referenced in any neighbor list is also
+a valid key in the adjacency map.
+
+\begin{filecontents*}{justified.hs}
+newtype JMap ks k v = JMap (Map k v)
     deriving Functor
 
-newtype JKey s k = Element k
+newtype k #$\in$# ks = Element k
 
-instance The (JMap s k v) (Map k v)
-instance The (JKey s k)  k
+instance The (JMap ks k v) (Map k v)
+instance The (k #$\in$# ks)  k
 
-member ::  k -> JMap s k v -> Maybe (JKey s k)
+member ::  k -> JMap ks k v -> Maybe (k #$\in$# ks)
 
-lookup   :: JKey s k -> JMap s k v -> v
+lookup   :: k #$\in$# ks -> JMap ks k v -> v
 
 reinsert
-  :: JKey s k -> v -> JMap s k v -> JMap s k v
+  :: k #$\in$# ks -> v -> JMap ks k v -> JMap ks k v
 
 withMap
 :: Map k v  -> (forall s. JMap s k v -> t) -> t
@@ -839,26 +870,27 @@ Value in map 3: HELLO
 \subsection{Application: a type for directed graphs}
 
 \begin{minted}{haskell}
-data Neighbors φ = Neighbors
-    { outEdges :: [JKey φ Vertex]
-    , inEdges  :: [JKey φ Vertex] }
+data Neighbors keys = Neighbors
+    { outEdges :: Vertex #$\in$# keys
+    , inEdges  :: Vertex #$\in$# keys }
   
-type Digraph φ = JMap φ Vertex (Neighbors φ)
+type Digraph keys = JMap keys Vertex (Neighbors keys)
 \end{minted}
 
-\begin{minted}{haskell}
-addEdge   :: Vertex φ -> Vertex φ -> (forall φ'. Digraph φ' -> t) -> t
-\end{minted}
+%% \begin{minted}{haskell}
+%% addEdge   :: Vertex #$\in$# keys -> Vertex #$\in$# keys -> (forall keys'. Digraph keys' -> t) -> t
+%% \end{minted}
 
 
-\begin{minted}{haskell}
-check :: Int -> Digraph φ -> Either (FreshVertex φ) (Vertex φ)
-fresh :: Digraph φ -> FreshVertex φ
-addVertex :: FreshVertex φ -> Digraph φ ->
-            (forall φ'. (Vertex φ', Vertex φ -> Vertex φ', Digraph φ') -> t) -> t
-\end{minted}
+%% \begin{minted}{haskell}
+%% check :: Int -> Digraph φ -> Either (FreshVertex φ) (Vertex φ)
+%% fresh :: Digraph φ -> FreshVertex φ
+%% addVertex :: FreshVertex φ -> Digraph φ ->
+%%             (forall φ'. (Vertex φ', Vertex φ -> Vertex φ', Digraph φ') -> t) -> t
+%% \end{minted}
 
-\subsection{Faster lookup}
+
+\subsection{Application: Faster lookup}
 Although \texttt{justified-containers} defines a simple \texttt{newtype} wrapper for
 the key-plus-phantom-proof type, more interesting information about the location of
 the key within the corresponding data structure can sometimes be attached.
@@ -878,10 +910,107 @@ find   :: Ord k => k -> BST φ k v -> Maybe (Index phi)
 access :: Index phi -> BST φ k v -> (k,v)
 \end{lstlisting}
 
+\subsection{Changing the key set}
+*****
+But what about maps that are related, yet do not have exactly the same key sets?
+For example, the \texttt{insert} function will usually modify the key set of a map,
+yet we know that if a key was present in the original map, it must still be present
+in the expanded map. As a user, it would be quite frustrating if we had a key that
+was valid in the original map, but we were unable to use it freely in the expanded map!
+
+To support this use-case, \texttt{justified-containers} provides the functions
+\texttt{inserting} and \texttt{deleting}, with these signatures:
+\begin{minted}{haskell}
+deleting  :: Ord k => k #$\in$# ks -> JMap ks k v
+          -> (forall ks'. JMap ks' k v
+                      -> (k #$\in$# ks' -> k #$\in$# ks)
+                      -> t)
+          -> t
+
+inserting :: Ord k => k -> v -> JMap ks k v
+          -> (forall ks'. JMap ks' k v
+                       -> (k #$\in$# ks -> k #$\in$# ks')
+                       -> k #$\in$# ks
+                       -> t)
+          -> t
+\end{minted}
+Since these functions each result in maps with new key sets, we must
+introduce the ghost of these key sets inside another \texttt{forall}.
+But what are the other parameters for? In the case of \texttt{inserting},
+the computation has access to:
+\begin{enumerate}
+\item The updated map, of type \texttt{JMap ks' k v}. The phantom type \texttt{ks'}
+  represents the key set \texttt{ks}, updated with the newly-inserted key.
+\item A function that represents the inclusion of \texttt{ks} into \texttt{ks'}.
+  The user can apply this function to convert a proof that a certain key belonged to the
+  old map (that is, a value of type \texttt{k $\in$ ks}) into a proof that the key also belongs to the new map (a value of type \texttt{k $\in$ ks'}).
+\item Evidence that the new key is present in the new key set.
+\end{enumerate}
+
+Similarly, the continuation for \texttt{deleting} has access to both the updated map
+and a representation of the inclusion of keys from the new map into the old map.
+
+The library author must do a bit of a balancing act here. It is important to provide
+the user with a supply of evidence and proof combinators so that they are able to
+express the fact that the API is being used properly, but it is not always clear how
+much information should be added. For example, the user may well want to argue that a
+every key \emph{other} than the deleted one is still present in a map modified by
+\texttt{deleting}, but the API provides no straightforward way to do this.
+
+\begin{filecontents*}{delete1.hs}
+newtype Insert k v m = Insert Defn
+newtype Delete k m   = Delete Defn
+
+insert :: Ord k
+       => (k ~~ k)
+       -> (v ~~ v)
+       -> (Map k v ~~ m)
+       -> (Map k v ~~ Insert k v m)
+insert k v m =
+    defn (Map.insert (bare k) (bare v) (bare m))
+       
+delete :: Ord k
+       => (k ~~ k ::: k #$\in$# KeySet m)
+       -> (Map k v ~~ m)
+       -> (Map k v ~~ Delete k m)
+delete k m = defn (Map.delete (bare k) (bare m))
+\end{filecontents*}
+\begin{filecontents*}{delete2.hs}
+subset_elts :: (a #$\subseteq$# b) -> (x #$\in$# a)
+            -> Proof (x #$\in$# b)
+subset_elts _ = sorry
+
+insert_supset :: Proof (Keys m #$\subseteq$# Keys (Insert k v m))
+insert_supset = sorry
+
+key_is_present :: Proof (k #$\in$# Insert k v m)
+key_is_present = sorry
+
+delete_subset :: Proof (Keys (Delete k m) #$\subseteq$# Keys m)
+delete_subset = sorry
+
+key_is_missing  :: (k' #$\in$# Keys m) -> (k /= k')
+                -> Proof (k' #$\in$# Keys (Delete k m))
+key_is_missing _ _ = sorry                
+\end{filecontents*}
+
+\begin{figure*}
+  \begin{minipage}{0.49\textwidth}
+    \inputminted{haskell}{delete1.hs}
+  \end{minipage}
+  \begin{minipage}{0.49\textwidth}
+    \inputminted{haskell}{delete2.hs}
+  \end{minipage}
+  \caption{Separation of lemmas from API functions. The functions
+    \texttt{insert} and \texttt{delete} replace the more complex
+    \texttt{inserting} and \texttt{deleting} from \texttt{justified-containers}.
+    The library author can add any number of useful lemmas without burdening the
+    user.}
+\end{figure*}
 
 \section{Case Study \#3: Encoding arbitrary properties}
 
-\begin{figure*}
+\begin{figure*}[t!]
   \hspace{-2.5in}
   \scalebox{0.6}{{
   \begin{minipage}{\textwidth}
@@ -1008,7 +1137,13 @@ proof2 = tableaux
     \label{tableaux-example}}
 \end{figure}
 
+\subsection{Refinement types via phantom predicates}
 
+(cite the \texttt{refined} library here) \cite{refined}
+
+\bibliographystyle{abbrvnat}
+
+\bibliography{gdp.bib}
 %% \begin{thebibliography}{10}
 %%   \softraggedright
   

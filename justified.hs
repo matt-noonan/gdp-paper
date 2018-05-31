@@ -1,19 +1,17 @@
-member :: Ord k => k -> MapK s k v -> Maybe (k {$\in$} s)
-
-newtype JMap s k v = JMap (Map k v)
+newtype JMap ks k v = JMap (Map k v)
     deriving Functor
 
-newtype JKey s k = Element k
+newtype k #$\in$# ks = Element k
 
-instance The (JMap s k v) (Map k v)
-instance The (JKey s k)  k
+instance The (JMap ks k v) (Map k v)
+instance The (k #$\in$# ks)  k
 
-member ::  k -> JMap s k v -> Maybe (JKey s k)
+member ::  k -> JMap ks k v -> Maybe (k #$\in$# ks)
 
-lookup   :: JKey s k -> JMap s k v -> v
+lookup   :: k #$\in$# ks -> JMap ks k v -> v
 
 reinsert
-  :: JKey s k -> v -> JMap s k v -> JMap s k v
+  :: k #$\in$# ks -> v -> JMap ks k v -> JMap ks k v
 
 withMap
 :: Map k v  -> (forall s. JMap s k v -> t) -> t

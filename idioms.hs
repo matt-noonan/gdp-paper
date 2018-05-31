@@ -37,7 +37,7 @@ safeEndpts = do
 gdpHead :: List NonZero a -> a
 gdpHead xs = case the xs of
   (x:_) -> x
-  []    -> error "unreachable"
+  []    -> unreachable
 
 gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"
