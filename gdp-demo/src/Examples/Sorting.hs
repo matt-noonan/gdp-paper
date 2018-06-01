@@ -45,6 +45,7 @@ infixr 3 &&
 infixr 2 ||
 infixr 1 -->
 
+{-
 data Proof p = QED deriving (Functor, Applicative, Monad)
 
 factor_or :: ((p `Or` q) `And` (p `Or` r)) `Impl` (p `Or` (q `And` r))
@@ -55,3 +56,4 @@ factor_or = tableaux
 
 factor_or :: (p || q) && (p || r) -> Proof (p || (q && r))
 factor_or = f
+-}

@@ -20,12 +20,14 @@ library
                      , Named
                      , Lists
                      , Sorted
+                     , St
                      , Maps
                      , Tableaux
                      , Propositional
                      , Solver.Tableaux
                      , Examples.Dot
                      , Examples.Sorting
+                     , Examples.St
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , mtl

@@ -755,7 +755,7 @@ The user has decided to name two different functions \texttt{Simon}, subverting 
 guarantees offered by the API of the \texttt{Sorted} module. It is dangerous to
 name a ghost!
 
-Now compare to the analogous program, using \texttt{name} instead of \texttt{any\_name}:
+Now compare this to the analogous program, using \texttt{name} instead of \texttt{any\_name}:
 \begin{minted}{haskell}
 name compare $ \up ->
   name (comparing Down) $ \down ->
@@ -764,7 +764,7 @@ name compare $ \up ->
     in the (mergeBy up list1 list2)
 \end{minted}
 \noindent
-This results in a compile-time error:
+Attemptig to compile this program results in a type error:
 
 \begin{lstlisting}
   • Couldn't match type "name1" with "name"
@@ -773,8 +773,8 @@ This results in a compile-time error:
       Actual type: SortedBy name1 [Integer]
 \end{lstlisting}
 \noindent
-The critical difference is that a user of the library is not allowed to create a named
-value by fiat. Instead, they are only allowed to \emph{consume} a named value, by
+What is the critical difference between these two examples? In the first, a user is
+allowed to \emph{create} a named value by fiat. In the second, the user is only allowed to \emph{consume} a named value, by
 providing a polymorphic function that can work with \emph{any} named value. The library's API provides
 a helper function---in this case, \texttt{name}---for applying the consumer to a normal, unnamed value.
 In practice, it is as if the
@@ -795,17 +795,67 @@ Informally, we can think of \texttt{ST s a} as representing a \texttt{State} mon
 named stores, such as
 \begin{minted}{haskell}
 data Store = Store
+newtype Region s = Region Defn
 
-type St s = State (Store ~~ s)
+type St s = State (Store ~~ Region s)
 
 runSt :: (forall s. St s a) -> a
-runSt action = name Store (evalState action)
+runSt action = byDefn Store (evalState action)
 \end{minted}
+
+The notion of treating the \texttt{ST} monad's phantom type as a region name immediately leads to ideas for
+other primitives. For example, we could introduce a binary type constructor $\cap$ so that \texttt{s $\cap$ s'}
+would name the region at the intersection of \texttt{s} and \texttt{s'}. 
+
+\begin{minted}{haskell}
+-- The standard "state thread" API
+runSt    :: (forall s. St s a) -> a
+
+newRef   ::            a -> St s (a #$\in$# Region s)
+readRef  :: (a #$\in$# Region s) -> St s a
+writeRef :: (a #$\in$# Region s) -> a -> St s ()
+
+-- Extending the API with shared references.
+runSt2 :: (forall s s'. St (s #$\cap$# s') a) -> a
+
+liftL :: St s a -> St (s #$\cap$# s') a
+liftR :: St s' a -> St (s #$\cap$# s') a
+
+share :: (a #$\in$# Region s) -> St s (a #$\in$# Region (s #$\cap$# s'))
+
+use  :: (a #$\in$# Region (s #$\cap$# s')) -> (a #$\in$# Region s)
+symm :: (a #$\in$# Region (s #$\cap$# s')) -> (a #$\in$# Region (s' #$\cap$# s))
+\end{minted}
+Critically, the ``shared reference'' API only allows the
+original state thread to move a reference into the shared region
+In effect, \texttt{runSt2} lets the user run a computation that makes use of
+two partially-overlapping memory regions. Within that computation, the user
+can run sub-computations that use one or the other memory region, and
+sub-computations can move any variable that they own into the common overlap
+via \texttt{share}.
 
 \section{Case Study \#2: \texttt{Maybe}-free lookup in containers}
 
 In this section, we will investigate the pit of despair that leads so
 many developers to follow a map lookup by \texttt{fromJust}.
+
+It is instructive to compare the two functions \texttt{lookup :: k -> Map k v -> Maybe v}
+and \texttt{lookup :: (k $\in$ ks) -> JMap ks k v -> v}. We do not intend to claim that
+one of these is better than the other. Instead, the claim is that these two functions
+\emph{reflect different states of the user's knowledge}.
+
+If the user legitimately does not know whether or not a key is present, then the
+\texttt{Maybe}-returning \texttt{lookup} is called for. The user's incomplete knowledge
+about the result of the operation is exactly reflected in the return type, so they will
+not feel inconvenienced by the need to handle both the \texttt{Just v} (key present)
+and \texttt{Nothing} (key absent) cases.
+
+On the other hand, if the user already believes the key should be present based on some
+external evidence, then they will be happier writing a program that does not need to handle
+the impossible missing-key state. But they must demonstrate that evidence to the library
+somehow!  ****
+
+\subsection{Application: well-formed graphs}
 
 The power of this method becomes more apparent when considering maps where
 the values are expected to reference the keys in some way. For example, a
@@ -1127,7 +1177,7 @@ For the user, the effect appears to be that \texttt{tableaux} can act as a value
 type \texttt{p} whenever \texttt{p} is a valid formula in propositional logic.
 
 \begin{filecontents*}{tableaux.hs}
-proof1, proof2 :: Proof (p {$\wedge$} q --> p {$\vee$} q)
+proof1, proof2 :: Proof (p #$\wedge$# q --> p #$\vee$# q)
   
 proof1 =  and_elimL
        |. or_introL
