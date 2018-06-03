@@ -117,7 +117,7 @@
 \author{Matt Noonan}
 \orcid{1234-5678-9012-3456}
 \affiliation{%
-  \institution{Kataskeue LLC}
+  \institution{Kataskeue LLC, Input Output HK}
 %  \streetaddress{Esty St}
   \city{Ithaca}
   \state{NY}
@@ -341,8 +341,14 @@ a pit of despair: they have ended up with a program that is \emph{exactly as fra
 author had used the run-time-failure idiom!\footnote{In fact, things are slightly \emph{worse}: we have also introduced a little
 bit of extra allocation and indirection for creating and unpacking the return value in the non-error case.}
 
+\subsection{The structure of this paper}
 In this paper, we will use a series of case studies to show how library authors can write
-functions that can ensure certain pre-conditions are met, without the 
+functions that can ensure certain pre-conditions are met, without the  ***
+
+The GDP technique is simple to implement. Each case study includes example library code
+demonstrating how to safely implement ***, along with usage examples. Although the
+examples in this paper are mostly self-contained, a project suitable for experimentation in
+\texttt{GHCi} is also available in this paper's \texttt{git} repository \cite{this}.
 
 \section{Warm-up: Faux dependent types}
 
@@ -385,7 +391,7 @@ main = do
   ys <- readLn
   sizing xs $ \xs' -> do
     case align xs' ys of
-      Nothing  -> putStrLn "List mismatch!"
+      Nothing  -> putStrLn "Size mismatch!"
       Just ys' -> print (dot xs' ys')
 \end{filecontents*}
 
@@ -1014,6 +1020,26 @@ much information should be added. For example, the user may well want to argue t
 every key \emph{other} than the deleted one is still present in a map modified by
 \texttt{deleting}, but the API provides no straightforward way to do this.
 
+\begin{filecontents*}{defn.hs}
+-- Continuing module Named:
+data Defn = Defn -- Type exported, constructor hidden.
+
+type Defining f = (Coercible f Defn, Coercible Defn f)
+
+defn :: Defining f => a -> (a ~~ f)
+defn = coerce
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{defn.hs}
+  \caption{Extending the \texttt{Named} module with
+    an API that allows library authors to introduce
+    special names by fiat. The \texttt{Defining} typeclass
+    leverages \texttt{GHC}'s magic \texttt{Coercible} class \cite{Breitner:2014:SZC:2692915.2628141},
+    ensuring that \texttt{defn} is available a library's author but not
+    to the library's users. \Cref{lemma-demo} provides a usage example.}
+\end{figure}
+
 \begin{filecontents*}{delete1.hs}
 newtype Insert k v m = Insert Defn
 newtype Delete k m   = Delete Defn
@@ -1062,10 +1088,86 @@ key_is_missing _ _ = sorry
     \texttt{insert} and \texttt{delete} replace the more complex
     \texttt{inserting} and \texttt{deleting} from \texttt{justified-containers}.
     The library author can add any number of useful lemmas without burdening the
-    user.}
+    user. \label{lemma-demo}}
 \end{figure*}
 
 \section{Case Study \#3: Encoding arbitrary properties}
+
+As a final case study, we investigate how the GDP technique can be used to
+create APIs that can enforce arbitrary conditions on functions. ****
+
+The types used to enforce non-emptiness of the input to \texttt{gdpHead} in
+\Cref{idioms} is similar to the \texttt{Refined} type from the \texttt{refinement}***
+package. ***
+
+In this case study, let's consider what kind of APIs we could write if we separate
+type-level names for each value from the constraints we want to place on those values.
+For example, let us return to the \texttt{head} function. We want ensure that the
+user only calls \texttt{head} on a list \texttt{xs} with outer constructor \texttt{(:)} (``cons''). We can now write, very explicitly, the requirement that the library asks of the user
+when using \texttt{head}: the parameter, called \texttt{xs}, must have outermost constructor
+\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition:
+\begin{minted}{haskell}
+newtype IsCons xs = IsCons Defn
+head :: ([a] ~~ xs ::: IsCons xs) -> a
+\end{minted}
+Here, the \texttt{:::} should be read ``such that''; altogether, the phrase 
+\texttt{(a ~~ n ::: p)} can be read ``a value of type \texttt{a}, named \texttt{n}, such
+that condition \texttt{p} holds.''
+
+The primary difference between names and other predicates is that a name, by construction,
+is permanently attached to a value, while predicates can be attached or detached from values
+more flexibly. Of course, it wouldn't do if a user could freely attach \emph{any} predicate to a value. Instead, we want to ***
+
+\begin{filecontents*}{pred.hs}
+-- Type exported, constructor hidden (but see `sorry`)
+data Proof p = QED deriving (Functor, Applicative, Monad)
+
+-- Attaching predicates to values
+newtype a ::: p = SuchThat Defn
+
+because :: a -> Proof p -> (a ::: p)
+x `because` p = coerce x
+
+-- Logical constants
+data TRUE
+data FALSE
+data p && q
+data p || q
+data p --> q
+data Not p
+
+-- Local inference rules (implementations all
+-- ignore parameters and return `QED`)
+and_intro   :: p -> q -> Proof (p && q)
+or_elimL    :: (p || q) -> Proof p
+not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+contradicts :: p -> Not p -> Proof FALSE
+absurd      :: FALSE -> Proof p
+  -- ... and many more
+
+-- Proof combinators (specialized from Control.Monad)
+-- Carefuly fixity definitions allow easy composition
+-- of linear proofs.
+(|$) :: p -> (p -> Proof q) -> Proof q 
+(|.) :: (p -> Proof q)
+     -> (q -> Proof r) -> (p -> Proof r)
+(|/) :: ((p -> Proof q) -> Proof r)
+     -> (p -> Proof q) -> Proof r
+(|\) :: (p -> Proof q)
+     -> ((p -> Proof q) -> Proof r) -> Proof r
+
+-- Exported function that allowis library authors to
+-- sassert arbitrary axioms about their API.
+sorry :: Proof p
+sorry = QED
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{pred.hs}
+  \caption{Basic constants and functions for building up the ``proofs''
+    in ``ghosts of departed proofs''. 
+    \label{predicate-logic}}
+\end{figure}
 
 \begin{figure*}[t!]
   \hspace{-2.5in}

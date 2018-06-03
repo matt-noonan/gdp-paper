@@ -9,5 +9,5 @@ main = do
   ys <- readLn
   sizing xs $ \xs' -> do
     case align xs' ys of
-      Nothing  -> putStrLn "List mismatch!"
+      Nothing  -> putStrLn "Size mismatch!"
       Just ys' -> print (dot xs' ys')
