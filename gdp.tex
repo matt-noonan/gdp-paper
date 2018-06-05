@@ -370,13 +370,18 @@ feel justified in ignoring the error case entirely. But now we see how the user 
 a pit of despair: they have ended up with a program that is \emph{exactly as fragile} as one where the library
 author had used the run-time-failure idiom!\footnote{In fact, things are slightly \emph{worse}: we have also introduced a little
 bit of extra allocation and indirection for creating and unpacking the return value in the non-error case.}
-Even if the user has mentally constructed a proof that \texttt{fromJust} is safe \emph{right now}, who can say what will
-happen as the software changes over time? Without tooling to ensure that the user's proof \emph{remains valid},
+Even if the user has mentally constructed a proof that this specific use of \texttt{fromJust} is safe \emph{right now},
+who can say what will
+happen as the software changes over time? Without tooling to ensure that the user's proof \emph{remains} valid,
 the software is left in a brittle state.
 
 \subsection{The structure of this paper}
-In this paper, we will use a series of case studies to show how library authors can write
-functions that can ensure certain pre-conditions are met, without the  ***
+In this paper, we will use a series of case studies to show how library authors can create
+APIs that are both \emph{safe} and \emph{ergonomic}. By \emph{safe}, we mean that the
+user cannot cause a run-time error or undefined behavior when using the API. Incorrect uses
+become compiler errors. By \emph{ergonomic}, we mean that the API is straightforward
+enough that the user is not tempted to subvert the library's safety guarantees by using
+unsafe functions. ****safety argument to the library***
 
 The GDP technique is simple to implement. Each case study includes example library code
 demonstrating how to safely implement ***, along with usage examples. Although the
@@ -828,7 +833,7 @@ In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} propos
 representing a name attached to a region of the heap \cite{timany2017logical}.
 Informally, we can think of \texttt{ST s a} as representing a \texttt{State} monad over
 \emph{named stores}, like so:
-\begin{minted}{haskell}
+\begin{minted}[frame=none]{haskell}
 data Store = Store
 newtype Region s = Region Defn
 
@@ -889,8 +894,8 @@ access to the shared cell. Yet even though the private reference is in scope dur
 the second sub-computation, any attempt to access it results in a compilation error.
 
 \begin{filecontents*}{st.hs}
-demo :: Bool
-demo = runSt2 $ do
+stSharingDemo :: Bool
+stSharingDemo = runSt2 $ do
   -- In the "left" memory region, create and return
   -- two references; one shared, and one not shared.
   (secret, ref) <- liftL $ do
