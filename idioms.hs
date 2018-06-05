@@ -1,4 +1,3 @@
---------------------------------------------------------
 -- Unsafe API using non-total functions.
 
 head :: [a] -> a
@@ -9,13 +8,13 @@ head xs = case xs of
 endpts = do
   putStrLn "Enter a non-empty list of integers:"
   xs <- readLn
-  if xs /= [] then return (head xs, head $ reverse xs)
-              else endpts
+  return (head xs, head $ reverse xs)
 
 --------------------------------------------------------
 -- Returning Maybe / Optional values. Safe, but requires
 -- the caller to pattern-match on the Maybe at every use,
--- even when the list is known to be non-empty.
+-- even when the list is known to be non-empty. Frustrated
+-- users cannot be blamed for using `fromJust`!
 
 safeHead :: [a] -> Maybe a
 safeHead xs = case xs of
@@ -25,14 +24,14 @@ safeHead xs = case xs of
 safeEndpts = do
   putStrLn "Enter a non-empty list of integers:"
   xs <- readLn
-  case (safeHead xs, safeHead $ reverse xs) of
-    (Just x, Just y) -> return (x, y)
-     _               -> safeEndpts
+  case safeHead xs of
+    Just x -> return (x, fromJust (safeHead $ reverse xs))
+    _      -> safeEndpts
 
 -------------------------------------------------------
 -- "Ghosts of Departed Proofs". Safe. Does not return
 -- an optional value; preconditions are checked early
--- and represented in phantom type parameters.
+-- and carried by "ghosts" (specialized phantom types).
 
 gdpHead :: List NonZero a -> a
 gdpHead xs = case the xs of

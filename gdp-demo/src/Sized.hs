@@ -1,10 +1,11 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Sized
   ( Size, the, sZipWith, sizing, align
-  , Zero, Add, nil, (+++), zero_neutral, add_commutes
+  , Zero, type (+), nil, (+++), zero_neutral, add_commutes
   , Infinite, omega, pop, infinity_absorbs
   ) where
 
@@ -31,18 +32,18 @@ align xs ys = if length (the xs) == length ys
 ----------------------------------------------------------------
 
 data Zero
-data Add x y
+data x + y
 
 nil :: Size Zero [a]
 nil = Size []
 
-(+++) :: Size n [a] -> Size m [a] -> Size (Add n m) [a]
+(+++) :: Size n [a] -> Size m [a] -> Size (n + m) [a]
 xs +++ ys = coerce (the xs ++ the ys)
 
-zero_neutral :: Size (Add Zero n) a -> Size n a
+zero_neutral :: Size (Zero + n) a -> Size n a
 zero_neutral = coerce
 
-add_commutes :: Size (Add n m) a -> Size (Add m n) a
+add_commutes :: Size (n + m) a -> Size (m + n) a
 add_commutes = coerce
 
 ----------------------------------------------------------------
@@ -55,5 +56,5 @@ omega = Size [0..]
 pop :: Size Infinite [a] -> (a, Size Infinite [a])
 pop (Size (x:xs)) = (x, coerce xs)
 
-infinity_absorbs :: Size (Add n Infinite) a -> Size Infinite a
+infinity_absorbs :: Size (n + Infinite) a -> Size Infinite a
 infinity_absorbs = coerce

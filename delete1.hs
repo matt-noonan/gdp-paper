@@ -10,7 +10,7 @@ insert k v m =
     defn (Map.insert (bare k) (bare v) (bare m))
 
 delete :: Ord k
-       => (k ~~ k ::: k #$\in$# KeySet m)
+       => (k ~~ k ::: k #$\in$# Keys m)
        -> (Map k v ~~ m)
        -> (Map k v ~~ Delete k m)
 delete k m = defn (Map.delete (bare k) (bare m))

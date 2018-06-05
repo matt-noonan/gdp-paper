@@ -19,7 +19,7 @@ data Not p
 -- ignore parameters and return `QED`)
 and_intro   :: p -> q -> Proof (p && q)
 or_elimL    :: (p || q) -> Proof p
-not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+impl_intro  :: (p -> Proof q) -> Proof (p --> q)
 contradicts :: p -> Not p -> Proof FALSE
 absurd      :: FALSE -> Proof p
   -- ... and many more
