@@ -2,25 +2,40 @@ data Zero    -- no constructors, ghosts need no body
 data NonZero
 data x + y
 
-nil :: List Zero a
-nil = List []
+nil :: ([a] ~~ Nil)
+nil = defn []
 
-gdpHead :: List NonZero a -> a
-gdpHead xs = head (the xs) -- safe!
+gdpHead :: ([a] ~~ xs ::: IsCons xs) -> (a ~~ Head xs)
+gdpHead xs = defn (head (the xs)) -- safe!
 
-gdpRev :: List n a -> List n a
-gdpRev = coerce . reverse . coerce
+gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
+gdpRev = defn . reverse . coerce
 
-classify :: [a] -> Either (List Zero a) (List NonZero a)
+gdpLen :: ([a] ~~ xs) -> (Integer ~~ Length xs)
+gdpLen xs = defn (length (the xs))
+
+classify :: ([a] ~~ xs) -> Either (Proof (IsCons xs)) (Proof (IsNil xs))
 classify xs = case xs of
-  []    -> Left  (coerce xs)
-  (_:_) -> Right (coerce xs)
+  []    -> Left sorry
+  (_:_) -> Right sorry
 
-(+++) :: List n a -> List m a -> List (n + m) a
-xs +++ ys = coerce (the xs ++ the ys)
+(+++) :: ([a] ~~ xs)
+      -> ([a] ~~ ys)
+      -> ([a] ~~ xs +++ ys)
+xs +++ ys = defn (the xs ++ the ys)
 
-zero_neutral :: List (Zero + n) a -> List n a
-zero_neutral = coerce
+-- Lemmas
+length_spec :: Proof ( (IsNil xs && Length xs == Zero)
+  || (IsCons xs && Length xs == Succ (Length (Tail xs))) )
 
-add_commutes :: List (n + m) a -> List (m + n) a
-add_commutes = coerce
+length_sum :: Proof (Length (xs +++ ys) == Length xs + Length ys)
+length_Sum = sorry
+
+rev_length :: Proof (Length (Reverse xs) == Length xs)
+rev_length = sorry
+
+zero_neutral :: Proof (n == Zero + n)
+zero_neutral = sorry
+
+add_commutes :: Proof (n + m == m + n)
+add_commutes = sorry

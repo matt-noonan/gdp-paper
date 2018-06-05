@@ -33,7 +33,7 @@ safeEndpts = do
 -- an optional value; preconditions are checked early
 -- and carried by "ghosts" (specialized phantom types).
 
-gdpHead :: List NonZero a -> a
+gdpHead :: (a ~~ xs ::: IsCons xs) -> a --List NonZero a -> a
 gdpHead xs = case the xs of
   (x:_) -> x
   []    -> unreachable

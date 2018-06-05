@@ -1,7 +1,7 @@
 test = Map.fromList [ (1, "Hello"), (2, "world!") ]
 
-withMap test $ \table ->
-  case member 1 table of
+name test $ \table -> name 1 $ \k ->
+  case member k table of
 
     Nothing  -> putStrLn "Missing key!"
 

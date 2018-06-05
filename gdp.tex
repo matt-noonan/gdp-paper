@@ -286,7 +286,7 @@ safeEndpts = do
 -- an optional value; preconditions are checked early
 -- and carried by "ghosts" (specialized phantom types).
 
-gdpHead :: List NonZero a -> a
+gdpHead :: (a ~~ xs ::: IsCons xs) -> a --List NonZero a -> a
 gdpHead xs = case the xs of
   (x:_) -> x
   []    -> unreachable
@@ -388,180 +388,6 @@ demonstrating how to safely implement ***, along with usage examples. Although t
 examples in this paper are mostly self-contained, a project suitable for experimentation in
 \texttt{GHCi} is also available in this paper's \texttt{git} repository \cite{this}.
 
-\section{Warm-up: Faux dependent types}
-
-\begin{filecontents*}{ex1.hs}  
-{-# LANGUAGE RankNTypes #-}
-module Sized (Size, the, sZipWith, sizing, align) where
-
-newtype List n a = List a
-
-the :: List n a -> a
-the (List x) = x
-
-sZipWith ::
-  (a -> b -> c) -> List n a -> List n b -> List n c
-sZipWith f xs ys = List (zipWith f (the xs) (the ys))
-  
-sizing :: [a] -> (forall n. List n a -> t) -> t
-sizing xs k = k (List xs)
-
-align :: List n a -> [b] -> Maybe (List n b)
-align xs ys = if length (the xs) == length ys
-              then Just (List ys)
-              else Nothing
-\end{filecontents*}
-
-\begin{filecontents*}{ex2.hs}
-import Sized
-
-dot :: List n Double -> List n Double -> Double
-dot xs ys = sum (the $ sZipWith (*) xs ys)
-
-main :: IO ()
-main = do
-  xs <- readLn
-  ys <- readLn
-  sizing xs $ \xs' -> do
-    case align xs' ys of
-      Nothing  -> putStrLn "Size mismatch!"
-      Just ys' -> print (dot xs' ys')
-\end{filecontents*}
-
-\begin{figure}
-    \inputminted{haskell}{ex1.hs}
-  \caption{A small module defining a type for lists with a known length. \label{sizing}}
-\end{figure}
-\begin{figure}
-    \inputminted{haskell}{ex2.hs}
-    \caption{A user-defined dot product function that can only be used on same-sized lists,
-      and a usage example. The types of \texttt{xs'} and \texttt{ys'} ensure that they have
-      the same length, when both variables are in scope.\label{dot-product}}
-\end{figure}
-
-Despite  appearences, the phantom type parameter $n$ does not really represent the vector's length
-{\em per se}. Instead, we propose to think of the phantom type \texttt{p} in \texttt{List p a} as a predicate,
-and values of type \texttt{List n a} as ``lists of type \texttt{[a]}, equipped with a proof
-that they satisfy \texttt{p}''. Critically, this proof has no run-time impact: it is trapped in the
-phantom type parameter, and carried by a \texttt{newtype} wrapper that vanishes in
-the final compilation.
-
-
-As we attach increasingly sophisticated information into the phantom types, it becomes useful to
-have a uniform method for \emph{forgetting} all of the ornamentation, revealing the normal
-value underneath.
-
-In \Cref{dot-product}, note that the error handler for mismatched list sizes happens
-\emph{outside} of the dot product function. At the point where the \texttt{dot} function
-is actually invoked, the programmer has already provided evidence that the operation is
-safe, in the form of the phantom type parameters on \texttt{xs'} and \texttt{ys'}. This pattern
-fits well with a common approach to \emph{using} libraries: first, the user does input scrubbing
-and validation, and only then are the validated inputs are sent on to the main computations. 
-During validation, the user is proving that the library's prerequisites have been met. The
-main computations can then be written **** 
-
-\subsection{A feint towards dependent types}
-So far, the \texttt{Sized} API allows us to assert that two lists are known to have the same
-length, and to introduce an existentially-quantified (but unknown) size for a ``regular'' list.
-As the authors of the \texttt{Sized} module, we can introduce more interesting variations as
-well. For example, \Cref{size-evidence} shows one way to add types that represent a length of
-zero, or an even length, or the sum of two other lenghts. ***
-
-\begin{filecontents*}{more_lists.hs}
-data Zero    -- no constructors, ghosts need no body
-data NonZero
-data x + y
-
-nil :: List Zero a
-nil = List []
-
-gdpHead :: List NonZero a -> a
-gdpHead xs = head (the xs) -- safe!
-
-gdpRev :: List n a -> List n a
-gdpRev = coerce . reverse . coerce
-
-classify :: [a] -> Either (List Zero a) (List NonZero a)
-classify xs = case xs of
-  []    -> Left  (coerce xs)
-  (_:_) -> Right (coerce xs)
-  
-(+++) :: List n a -> List m a -> List (n + m) a
-xs +++ ys = coerce (the xs ++ the ys)
-
-zero_neutral :: List (Zero + n) a -> List n a
-zero_neutral = coerce
-
-add_commutes :: List (n + m) a -> List (m + n) a
-add_commutes = coerce
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{more_lists.hs}
-  \caption{Extending the \texttt{Sized} module with additional size predicates,
-    functions, and proof combinators for manipulating size evidence.\label{size-evidence}}
-  \end{figure}
-
-Except in the simplest of cases, it is important that the library author equip the
-user with a selection of \emph{proof combinators} for changing the shape of the
-property captured by the phantom type parameter. In \Cref{size-evidence}, \texttt{zero\_neutral}
-and \texttt{add\_commutes} are proof combinators that allow the user to convert
-evidence from one form to another.
-
-\begin{minted}[frame=none]{haskell}
-head' :: List NonZero a -> a
-head' xs = gdpHead (ok $ nil +++ xs)
-  where ok = zero_neutral
-
-norm2 :: List n Double -> Double
-norm2 xs = dot xs (ok $ xs +++ nil)
-  where ok = zero_neutral . add_commutes
-\end{minted}
-
-*** It is not so much effort to introduce a \texttt{NonEmpty} type for lists, but it
-would be intractable to add \texttt{EvenSizedList}, \texttt{InfiniteList},
-\texttt{EmptyList}, and so on. Each library function would need a variant
-for each new type, or else a carefully curated collection of typeclasses would
-be required to provide \emph{ad hoc} overloading. By contrast, the GDP approach
-allows the same library functions on a wide variety of *******.
-
-%% \subsection{Infinite lists}
-
-%% \begin{minted}{haskell}
-%% data Infinite
-
-%% omega :: List Infinite Int
-%% omega = List [0..]
-
-%% pop :: List Infinite a -> (a, List Infinite a)
-%% pop (List xs) = (head xs, List (tail xs))
-%% \end{minted}
-
-   
-\subsection{Limitations}
-As alluded to in the section heading, the GDP approach gives us
-types that have \emph{some} of the features of dependent types, but
-they are strictly less powerful. For example, we cannot
-write a dependently-typed \texttt{replicate} function of the form
-\texttt{replicate : (n : $\mathbb{N}$) -> A -> Vec A n}
-
-\subsection{The \texttt{The} typeclass}
-\begin{filecontents*}{theTC.hs}
-class The d a | d -> a where
-    the :: d -> a
-    default the :: Coercible d a => d -> a
-    the = coerce
-    
-instance The (List n a) a
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{theTC.hs}
-  \caption{The \texttt{The} typeclass, for dropping ghosts
-    from a type. The default instance should always be used,
-    so new instances can be created with an empty
-    \texttt{instance} declaration.}
-\end{figure}
 
 \subsection{Summary of the critical features}
 In the following sections, we will investigate several case studies that
@@ -624,7 +450,9 @@ mergeBy comp xs ys = go xs ys
 \end{minted}
 This efficient $O(n+m)$ implementation of \texttt{mergeBy} is easy to write,
 but puts the onus on the caller of \texttt{mergeBy} to ensure that the
-input lists have been sorted by the same comparator.
+input lists have been sorted by the same comparator. If the user accidentally
+fails to sort the two inputs in the same way, the result of \texttt{mergeBy}
+will silently be nonsense, possibly leading to a difficult-to-diagnose bug.
 
 It would be possible to implement a version of \texttt{mergeBy} that
 carefully inspected the inputs \texttt{xs} and \texttt{ys} as it
@@ -636,19 +464,19 @@ Most users of \texttt{mergeBy} would argue to themselves ``This is
 absurd! I already know the input lists were sorted properly. This
 function will never result in \texttt{Nothing}.'' It would be hard
 to blame the user when they reach for an  unsafe function like
-\texttt{fromJust :: Maybe a -> a}.
+\texttt{fromJust}.
 
 Clearly, there is little benefit for anybody in the above scenario. The
 library author is inconvenienced by the increased implementation complexity.
 The user is inconvenienced by the decreased performance and the need to
 pattern match on the result, even when they believe they already know the
 outcome of that match. No wonder that the status quo is to just write
-the simple function along with a warning in the documentation, admonishing
+a stern warning in the documentation, admonishing
 any user who tries to \texttt{mergeBy} what they didn't \texttt{sortBy}.
 
-But if the user really \emph{does} have evidence that the input lists have
-been sorted properly, can we devise a mechanism by which they can convince
-\texttt{mergeBy}?
+But what if the user really \emph{does} have proof that the input lists have
+been sorted properly? Can we devise a mechanism that allows the user to communicate
+this proof to \texttt{mergeBy}?
 
 \subsection{Conjuring a name}
 The first problem that meet is how to reflect the notion of two  comparators
@@ -683,13 +511,13 @@ name x k = k (coerce x)
 \end{filecontents*}
 
 \begin{filecontents*}{ordered.hs}
-module Sorted
-  (Named, SortedBy, sortBy, mergeBy) where   
+module Sorted (Named, SortedBy, sortBy, mergeBy) where   
 
 import The
 import Named
 
-import qualified Data.List as L
+import           Data.Coerce
+import qualified Data.List       as L
 import qualified Data.List.Utils as U
 
 newtype SortedBy o a = SortedBy a
@@ -723,7 +551,8 @@ main = do
 \begin{figure}
   \inputminted{haskell}{ordered.hs}
   \caption{A module for working with lists that have been sorted by an arbitrary
-    comparator.}
+    comparator. The refinement \texttt{SortedBy comp} is used to denote values that
+    have been sorted by the comparator named \texttt{comp}.}
 \end{figure}
 
 
@@ -980,16 +809,16 @@ instance The (JMap ks k v) (Map k v)
 instance The (k #$\in$# ks) k
 
 member   :: k -> JMap ks k v -> Maybe (k #$\in$# ks)
-lookup   :: k #$\in$# ks -> JMap ks k v -> v
-reinsert :: k #$\in$# ks -> v -> JMap ks k v -> JMap ks k v
-withMap  :: Map k v -> (forall s. JMap s k v -> t) -> t
+lookup   :: (k #$\in$# ks) -> JMap ks k v -> v
+reinsert :: (k #$\in$# ks) -> v -> JMap ks k v -> JMap ks k v
+withMap  :: Map k v -> (forall ks. JMap ks k v -> t) -> t
 \end{filecontents*}
 
 \begin{filecontents*}{justified-usage.hs}
 test = Map.fromList [ (1, "Hello"), (2, "world!") ]
 
-withMap test $ \table ->
-  case member 1 table of
+name test $ \table -> name 1 $ \k ->
+  case member k table of
  
     Nothing  -> putStrLn "Missing key!"
   
@@ -1372,6 +1201,203 @@ proof2 = tableaux
 \subsection{Refinement types via phantom predicates}
 
 (cite the \texttt{refined} library here) \cite{refined}
+
+
+\section{Warm-up: Faux dependent types}
+
+\begin{filecontents*}{ex1.hs}  
+{-# LANGUAGE RankNTypes #-}
+module Sized (Size, the, sZipWith, sizing, align) where
+
+newtype List n a = List a
+
+the :: List n a -> a
+the (List x) = x
+
+sZipWith ::
+  (a -> b -> c) -> List n a -> List n b -> List n c
+sZipWith f xs ys = List (zipWith f (the xs) (the ys))
+  
+sizing :: [a] -> (forall n. List n a -> t) -> t
+sizing xs k = k (List xs)
+
+align :: List n a -> [b] -> Maybe (List n b)
+align xs ys = if length (the xs) == length ys
+              then Just (List ys)
+              else Nothing
+\end{filecontents*}
+
+\begin{filecontents*}{ex2.hs}
+import Sized
+
+dot :: List n Double -> List n Double -> Double
+dot xs ys = sum (the $ sZipWith (*) xs ys)
+
+dot :: ([Double] ~~ xs)
+    -> ([Double] ~~ ys ::: Length xs == Length ys)
+    -> Double
+dot xs ys = sum (the $ sZipWith (*) xs ys)
+    
+main :: IO ()
+main = do
+  xs <- readLn
+  ys <- readLn
+  sizing xs $ \xs' -> do
+    case align xs' ys of
+      Nothing  -> putStrLn "Size mismatch!"
+      Just ys' -> print (dot xs' ys')
+\end{filecontents*}
+
+\begin{figure}
+    \inputminted{haskell}{ex1.hs}
+  \caption{A small module defining a type for lists with a known length. \label{sizing}}
+\end{figure}
+\begin{figure}
+    \inputminted{haskell}{ex2.hs}
+    \caption{A user-defined dot product function that can only be used on same-sized lists,
+      and a usage example. The types of \texttt{xs'} and \texttt{ys'} ensure that they have
+      the same length, when both variables are in scope.\label{dot-product}}
+\end{figure}
+
+Despite  appearences, the phantom type parameter $n$ does not really represent the vector's length
+{\em per se}. Instead, we propose to think of the phantom type \texttt{p} in \texttt{List p a} as a predicate,
+and values of type \texttt{List n a} as ``lists of type \texttt{[a]}, equipped with a proof
+that they satisfy \texttt{p}''. Critically, this proof has no run-time impact: it is trapped in the
+phantom type parameter, and carried by a \texttt{newtype} wrapper that vanishes in
+the final compilation.
+
+
+As we attach increasingly sophisticated information into the phantom types, it becomes useful to
+have a uniform method for \emph{forgetting} all of the ornamentation, revealing the normal
+value underneath.
+
+In \Cref{dot-product}, note that the error handler for mismatched list sizes happens
+\emph{outside} of the dot product function. At the point where the \texttt{dot} function
+is actually invoked, the programmer has already provided evidence that the operation is
+safe, in the form of the phantom type parameters on \texttt{xs'} and \texttt{ys'}. This pattern
+fits well with a common approach to \emph{using} libraries: first, the user does input scrubbing
+and validation, and only then are the validated inputs are sent on to the main computations. 
+During validation, the user is proving that the library's prerequisites have been met. The
+main computations can then be written **** 
+
+\subsection{A feint towards dependent types}
+So far, the \texttt{Sized} API allows us to assert that two lists are known to have the same
+length, and to introduce an existentially-quantified (but unknown) size for a ``regular'' list.
+As the authors of the \texttt{Sized} module, we can introduce more interesting variations as
+well. For example, \Cref{size-evidence} shows one way to add types that represent a length of
+zero, or an even length, or the sum of two other lenghts. ***
+
+\begin{filecontents*}{more_lists.hs}
+data Zero    -- no constructors, ghosts need no body
+data NonZero
+data x + y
+
+nil :: ([a] ~~ Nil)
+nil = defn []
+
+gdpHead :: ([a] ~~ xs ::: IsCons xs) -> (a ~~ Head xs)
+gdpHead xs = defn (head (the xs)) -- safe!
+
+gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
+gdpRev = defn . reverse . coerce
+
+gdpLen :: ([a] ~~ xs) -> (Integer ~~ Length xs)
+gdpLen xs = defn (length (the xs))
+
+classify :: ([a] ~~ xs) -> Either (Proof (IsCons xs)) (Proof (IsNil xs))
+classify xs = case xs of
+  []    -> Left sorry
+  (_:_) -> Right sorry
+  
+(+++) :: ([a] ~~ xs)
+      -> ([a] ~~ ys)
+      -> ([a] ~~ xs +++ ys)
+xs +++ ys = defn (the xs ++ the ys)
+
+-- Lemmas
+length_spec :: Proof ( (IsNil xs && Length xs == Zero)
+  || (IsCons xs && Length xs == Succ (Length (Tail xs))) )
+
+length_sum :: Proof (Length (xs +++ ys) == Length xs + Length ys)
+length_Sum = sorry
+
+rev_length :: Proof (Length (Reverse xs) == Length xs)
+rev_length = sorry
+
+zero_neutral :: Proof (n == Zero + n)
+zero_neutral = sorry
+
+add_commutes :: Proof (n + m == m + n)
+add_commutes = sorry
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{more_lists.hs}
+  \caption{Extending the \texttt{Sized} module with additional size predicates,
+    functions, and proof combinators for manipulating size evidence.\label{size-evidence}}
+  \end{figure}
+
+Except in the simplest of cases, it is important that the library author equip the
+user with a selection of \emph{proof combinators} for changing the shape of the
+property captured by the phantom type parameter. In \Cref{size-evidence}, \texttt{zero\_neutral}
+and \texttt{add\_commutes} are proof combinators that allow the user to convert
+evidence from one form to another.
+
+\begin{minted}[frame=none]{haskell}
+head' :: ([a] ~~ xs ::: ) -> a
+head' xs = gdpHead ((nil +++ xs) ...ok)
+  where ok =  zero_neutral
+           |. symmetric
+
+norm2 :: [Double] -> Double
+norm2 xs = name xs $ \xs' -> dot xs' ((xs' +++ nil) ...ok)
+  where ok = zero_neutral . add_commutes
+\end{minted}
+
+*** It is not so much effort to introduce a \texttt{NonEmpty} type for lists, but it
+would be intractable to add \texttt{EvenSizedList}, \texttt{InfiniteList},
+\texttt{EmptyList}, and so on. Each library function would need a variant
+for each new type, or else a carefully curated collection of typeclasses would
+be required to provide \emph{ad hoc} overloading. By contrast, the GDP approach
+allows the same library functions on a wide variety of *******.
+
+%% \subsection{Infinite lists}
+
+%% \begin{minted}{haskell}
+%% data Infinite
+
+%% omega :: List Infinite Int
+%% omega = List [0..]
+
+%% pop :: List Infinite a -> (a, List Infinite a)
+%% pop (List xs) = (head xs, List (tail xs))
+%% \end{minted}
+
+   
+\subsection{Limitations}
+As alluded to in the section heading, the GDP approach gives us
+types that have \emph{some} of the features of dependent types, but
+they are strictly less powerful. For example, we cannot
+write a dependently-typed \texttt{replicate} function of the form
+\texttt{replicate : (n : $\mathbb{N}$) -> A -> Vec A n}
+
+\subsection{The \texttt{The} typeclass}
+\begin{filecontents*}{theTC.hs}
+class The d a | d -> a where
+    the :: d -> a
+    default the :: Coercible d a => d -> a
+    the = coerce
+    
+instance The (List n a) a
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{theTC.hs}
+  \caption{The \texttt{The} typeclass, for dropping ghosts
+    from a type. The default instance should always be used,
+    so new instances can be created with an empty
+    \texttt{instance} declaration.}
+\end{figure}
 
 \bibliographystyle{abbrvnat}
 

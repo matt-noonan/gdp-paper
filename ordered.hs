@@ -1,10 +1,10 @@
-module Sorted
-  (Named, SortedBy, sortBy, mergeBy) where
+module Sorted (Named, SortedBy, sortBy, mergeBy) where
 
 import The
 import Named
 
-import qualified Data.List as L
+import           Data.Coerce
+import qualified Data.List       as L
 import qualified Data.List.Utils as U
 
 newtype SortedBy o a = SortedBy a

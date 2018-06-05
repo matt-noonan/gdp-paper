@@ -1,5 +1,5 @@
-demo :: Bool
-demo = runSt2 $ do
+stSharingDemo :: Bool
+stSharingDemo = runSt2 $ do
   -- In the "left" memory region, create and return
   -- two references; one shared, and one not shared.
   (secret, ref) <- liftL $ do
