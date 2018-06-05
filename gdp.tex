@@ -131,18 +131,24 @@
 
   Library authors often are faced with a design choice: should a function with
   preconditions be implemented as a partial function, or by returning a failure
-  condition on incorrect use?
-  In this paper, we introduce an API design pattern called ``ghost of departed
-  proofs''. The key idea is that surprisingly sophisticated preconditions can be
-  encoded in Haskell's type system with no run-time cost, allowing the compiler
-  to check that APIs are being used safely. Critically, this technique allows the
+  condition on incorrect use? Neither option is ideal. Partial functions lead
+  to frustrating run-time errors. Failure conditions must be checked
+  at the use-site,
+  placing an unfair tax on the users who have ensured that the function's
+  preconditions were correctly met.
+  
+  In this paper, we introduce an API design concept called ``ghosts of departed
+  proofs''. The key idea is that sophisticated preconditions can be
+  encoded in Haskell's type system with no run-time overhead, by using proofs
+  that inhabit phantom type parameters attached to \texttt{newtype} wrappers.
+  The user expresses correctness arguments by constructing proofs to inhabit
+  these phantom type parameters. Critically, this technique allows the
   library \emph{user} to decide when and how to validate that the APIs preconditions
-  have been met. The user is not required to handle errors at the use-site, but instead
-  can move error handling and validation to a more convenient location.
+  have been met.
 
-  The Ghosts of Departed Proofs approach to API design can acheive many of the benefits
-  of dependent types and refinement types, while only requiring mild extensions to
-  a Damas-Hindley-Milner type system. We demonstrate the utility of this approach
+  The ``ghosts of departed proofs'' approach to API design can acheive many of the benefits
+  of dependent types and refinement types, while only requiring well-understood extensions to
+  Haskell 2010. We demonstrate the utility of this approach
   through a series of case studies, showing how to enforce novel invariants for lists,
   maps, graphs, shared memory regions, and more.
 \end{abstract}
@@ -197,62 +203,38 @@
 %\input{samplebody-journals}
 
 \section{Introduction}
+\begin{quote}
+  [Rico Mariani] admonished us to think about how we can build platforms that lead developers to write great, high performance code such that developers just fall into doing the ``right thing''. That concept really resonated with me. It is the key point of good API design. We should build APIs that steer and point developers in the right direction.
+  
+  \hfill --- Brad Abrams \cite{pitofsuccess}
+\end{quote}
 
-One practical benefit of a powerful type
-system is the ability to enforce sophisticated program
+What is the purpose of a powerful type system? One practical perspective is
+that a type system provides a mechanism for enforcing program
 invariants at compile time. The desire to encode increasingly
-complex program invariants has led to a plethora of research
-on more sophisticated type systems, including dependent types \cite{augustsson1998cayenne,bove2009dependent}, refinement types \cite{freeman1991refinement}, linear
+sophisticated program invariants has led to a vast expanse of research
+on more complex type systems, including dependent types \cite{augustsson1998cayenne,bove2009dependent}, refinement types \cite{freeman1991refinement}, linear
 types \cite{wadler1990linear}, and many more. But despite this menagerie of powerful
 type systems, workaday Haskell programmers have already been able to encode
-relatively sophisticated invariants using nothing more than a
+surprisingly sophisticated invariants using nothing more than a
 few well-understood extensions to the Damas-Hindley-Milner type system.
 
 An early success story is the \texttt{ST} monad, which allows pure
 computations to make use of local, mutable state. A phantom type parameter
 and a clever use of rank-2 types in the \texttt{ST} monad's API allows the
 compiler to ensure that the local mutable state is invisible from the outside,
-and hence the resulting computation really \emph{is} pure. In fact, this
-trick is just the tip of a rather large iceberg. ****
+and hence the resulting computation really \emph{is} pure. As we will see, this
+trick is just the tip of a rather large iceberg.
 
 In this paper, we will take the perspective of a library author, writing in
-Haskell 2010 (plus a few battle-hardened language extensions). As a library
+Haskell 2010 (plus a few battle-tested language extensions). As a library
 author, our goal will be to design \emph{safe} APIs that are also \emph{ergonomic}
 for the end user. ``Safe'' means that we want to prevent the user from causing a
 run-time error. ``Ergonomic'' means that we do not want the correct use of our
 API to put an undue burden on the user.
 
-\subsection{The Pit of Despair and the Pit of Success}
-\begin{quote}
-  [Rico] admonished us to think about how we can build platforms that lead developers to write great, high performance code such that developers just fall into doing the "right thing". That concept really resonated with me. It is the key point of good API design. We should build APIs that steer and point developers in the right direction.
-  \hfill -- Brad Abrams
-\end{quote}
-
-In the context of API design, Microsoft program manager
-Rico Mariani coined the dual terms ``pit of despair'' and
-``pit of success'' \cite{pitofsuccess}. A pit is easy to fall into; APIs that
-make it easy to do the wrong thing lead the user into a ``pit of despair''.
-Conversely, APIs that make it easy to do the \emph{right} thing
-have a ``pit of success''. For example, an API ***
-
-What is the root cause of this frustration that drives
-well-intentioned programmers towards ****
-
-
-For example, a recent snapshot of \texttt{hackage}
-reveals over 2000 instances where the partial function
-\texttt{fromJust} is applied to the
-result of \texttt{Data.Map}'s \texttt{lookup}. Each one
-records the moment a programmer fell into a pit of despair:
-they have somehow reasoned that a certain key must be
-present in the map, but were given no mechanism for
-\emph{communicating} that reasoning to the
-\texttt{Data.Map} API. To escape the pit, they made the
-pragmatic---but unsafe---decision to introduce partiality.
-
 \begin{filecontents*}{idioms.hs}
 -- Unsafe API using non-total functions.
-
 head :: [a] -> a
 head xs = case xs of
   (x:_) -> x
@@ -268,7 +250,6 @@ endpts = do
 -- the caller to pattern-match on the Maybe at every use,
 -- even when the list is known to be non-empty. Frustrated
 -- users cannot be blamed for using `fromJust`!
-
 safeHead :: [a] -> Maybe a
 safeHead xs = case xs of
   (x:_) -> Just x
@@ -285,17 +266,17 @@ safeEndpts = do
 -- "Ghosts of Departed Proofs". Safe. Does not return
 -- an optional value; preconditions are checked early
 -- and carried by "ghosts" (specialized phantom types).
+rev_cons :: IsCons xs -> Proof (IsCons (Reverse xs))
 
-gdpHead :: (a ~~ xs ::: IsCons xs) -> a --List NonZero a -> a
-gdpHead xs = case the xs of
-  (x:_) -> x
-  []    -> unreachable
+gdpHead :: (a ~~ xs ::: IsCons xs) -> a
+gdpHead xs = head (the xs)
 
 gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
-  case classify xs of
-    Right xs -> return (gdpHead xs, gdpHead $ gdpRev xs)
+  name xs $ \xs -> case classify xs of
+    Right is_cons -> let ok = is_cons |$ rev_cons in
+      return (gdpHead xs, gdpHead (gdpRev xs ...ok))
     Left  _  -> gdpEndpts
 \end{filecontents*}
 
@@ -306,7 +287,9 @@ gdpEndpts = do
     The \texttt{gdpHead} function can only be invoked in
     a context where the user has already proven that the
     list is non-empty, combining the simplicity of the
-    first example with the safety of the second. See
+    first example with the safety of the second. \texttt{rev\_cons}
+    is a proof combinator exported by the library to help the
+    user prove that the reverse of a non-empty list is still non-empty. See
   \cref{sizing,size-evidence} for details.}
 \end{figure}
 
@@ -316,7 +299,9 @@ No matter the language, a programmer often has to write functions
 that place constraints on their input. For example, the venerable
 \texttt{head} function for extracting the first element of a list
 asks its users to only hand it a non-empty list to operate on.
-
+Now put yourself in the shoes of \texttt{head}'s author: how can
+you ensure that \texttt{head} will be used properly? Let us recount
+a variety of strategies used in the wild.
 
 \paragraph{Run-time failure on bad inputs.}
 Often the simplest approach is
@@ -375,18 +360,32 @@ who can say what will
 happen as the software changes over time? Without tooling to ensure that the user's proof \emph{remains} valid,
 the software is left in a brittle state.
 
+
+For example, a recent snapshot of \texttt{hackage}
+reveals over 2000 instances where the partial function
+\texttt{fromJust} is applied to the
+result of \texttt{Data.Map}'s \texttt{lookup}. Each one
+records the moment a programmer fell into a pit of despair:
+they have somehow reasoned that a certain key must be
+present in the map, but were given no mechanism for
+\emph{communicating} that reasoning to the
+\texttt{Data.Map} API. To escape the pit, they made the
+pragmatic---but unsafe---decision to introduce partiality.
+We can do better than this.
+
+
 \subsection{The structure of this paper}
 In this paper, we will use a series of case studies to show how library authors can create
 APIs that are both \emph{safe} and \emph{ergonomic}. By \emph{safe}, we mean that the
 user cannot cause a run-time error or undefined behavior when using the API. Incorrect uses
-become compiler errors. By \emph{ergonomic}, we mean that the API is straightforward
+will become compile-time errors. By \emph{ergonomic}, we mean that the API is straightforward
 enough that the user is not tempted to subvert the library's safety guarantees by using
-unsafe functions. ****safety argument to the library***
+unsafe functions. Crucially, we want the user to be able to \emph{communicate} their
+informal proofs to the library. If the user believes that a precondition has been met,
+they should be able to explain \emph{why} to the library!
 
-The GDP technique is simple to implement. Each case study includes example library code
-demonstrating how to safely implement ***, along with usage examples. Although the
-examples in this paper are mostly self-contained, a project suitable for experimentation in
-\texttt{GHCi} is also available in this paper's \texttt{git} repository \cite{this}.
+The GDP technique is simple to implement. Each case study includes example library code, along with usage examples. Although the examples in this paper are largely self-contained, a
+project suitable for experimentation in \texttt{GHCi} is also available in this paper's \texttt{git} repository \cite{this}.
 
 
 \subsection{Summary of the critical features}
@@ -1301,6 +1300,10 @@ gdpHead xs = defn (head (the xs)) -- safe!
 gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
 gdpRev = defn . reverse . coerce
 
+revCons :: ([a] ~~ xs ::: IsCons xs)
+        -> ([a] ~~ Reverse xs ::: IsCons (Reverse xs))
+revCons = defn . reverse . coerce
+        
 gdpLen :: ([a] ~~ xs) -> (Integer ~~ Length xs)
 gdpLen xs = defn (length (the xs))
 

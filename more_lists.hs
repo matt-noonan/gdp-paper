@@ -11,6 +11,10 @@ gdpHead xs = defn (head (the xs)) -- safe!
 gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
 gdpRev = defn . reverse . coerce
 
+revCons :: ([a] ~~ xs ::: IsCons xs)
+        -> ([a] ~~ Reverse xs ::: IsCons (Reverse xs))
+revCons = defn . reverse . coerce
+
 gdpLen :: ([a] ~~ xs) -> (Integer ~~ Length xs)
 gdpLen xs = defn (length (the xs))
 
