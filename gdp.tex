@@ -147,8 +147,8 @@
   have been met.
 
   The ``ghosts of departed proofs'' approach to API design can achieve many of the benefits
-  of dependent types and refinement types, while only requiring well-understood extensions to
-  Haskell 2010. We demonstrate the utility of this approach
+  of dependent types and refinement types, yet only requires some minor and well-understood
+  extensions to Haskell 2010. We demonstrate the utility of this approach
   through a series of case studies, showing how to enforce novel invariants for lists,
   maps, graphs, shared memory regions, and more.
 \end{abstract}
@@ -454,8 +454,8 @@ mergeBy comp xs ys = go xs ys
 This efficient $O(n+m)$ implementation of \texttt{mergeBy} is easy to write,
 but puts the onus on the caller of \texttt{mergeBy} to ensure that the
 input lists have been sorted by the same comparator. If the user accidentally
-fails to sort the two inputs in the same way, the result of \texttt{mergeBy}
-will silently be nonsense, possibly leading to a difficult-to-diagnose bug.
+fails to sort the two inputs in the same way, \texttt{mergeBy}
+will quietly produce nonsense, possibly leading to a subtle bug.
 
 It would be possible to implement a version of \texttt{mergeBy} that
 carefully inspected the inputs \texttt{xs} and \texttt{ys} as it
@@ -509,6 +509,8 @@ newtype Named name a = Named a
 instance The (Named name a) a
 type a ~~ name = Named name a
 
+-- Morally, the type of `name` is
+--      a -> (exists name. (a ~~ name))
 name :: a -> (forall name. (a ~~ name) -> t) -> t
 name x k = k (coerce x)
 \end{filecontents*}
@@ -561,7 +563,9 @@ main = do
 
 \begin{figure}
   \inputminted{haskell}{named.hs}
-  \caption{A module for attaching ghostly names to values.\label{name-module}}
+  \caption{A module for attaching ghostly names to values. The rank-2 type of \texttt{name},
+    making use of a polymorphic continuation, is one way to emulate an existential type in
+    Haskell.\label{name-module}}
 \end{figure}
 
 \begin{figure}

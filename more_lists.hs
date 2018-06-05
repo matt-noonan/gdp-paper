@@ -11,13 +11,6 @@ gdpHead xs = defn (head (the xs)) -- safe!
 gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
 gdpRev = defn . reverse . coerce
 
-revCons :: ([a] ~~ xs ::: IsCons xs)
-        -> ([a] ~~ Reverse xs ::: IsCons (Reverse xs))
-revCons = defn . reverse . coerce
-
-gdpLen :: ([a] ~~ xs) -> (Integer ~~ Length xs)
-gdpLen xs = defn (length (the xs))
-
 classify :: ([a] ~~ xs) -> Either (Proof (IsCons xs)) (Proof (IsNil xs))
 classify xs = case xs of
   []    -> Left sorry
@@ -29,6 +22,12 @@ classify xs = case xs of
 xs +++ ys = defn (the xs ++ the ys)
 
 -- Lemmas
+list_shape :: Proof (IsNil xs || IsCons xs)
+list_shape = axiom
+
+rev_cons :: IsCons xs -> Proof (IsCons (Reverse xs))
+rev_cons _ = axiom
+
 length_spec :: Proof ( (IsNil xs && Length xs == Zero)
   || (IsCons xs && Length xs == Succ (Length (Tail xs))) )
 
