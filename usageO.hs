@@ -6,4 +6,4 @@ main = do
   name (comparing Down) $ \gt -> do
     let xs' = sortBy gt xs
         ys' = sortBy gt ys
-    print (the xs', the ys', the (mergeBy gt xs' ys'))
+    print (the (mergeBy gt xs' ys'))

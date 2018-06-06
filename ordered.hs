@@ -7,8 +7,8 @@ import           Data.Coerce
 import qualified Data.List       as L
 import qualified Data.List.Utils as U
 
-newtype SortedBy o a = SortedBy a
-instance The (SortedBy o a) a
+newtype SortedBy comp a = SortedBy a
+instance The (SortedBy comp a) a
 
 sortBy :: ((a -> a -> Ordering) ~~ comp)
        -> [a]
