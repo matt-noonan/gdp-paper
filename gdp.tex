@@ -378,14 +378,14 @@ We can do better than this.
 
 \subsection{An alternative: Ghosts of Departed Proofs}
 In the following sections, we will elaborate a design concept for
-creating libraries that enables a dialogue between
-the library and the user: the library can require that certain conditions
+creating libraries that support a dialogue between
+ library and  user: the library can require that certain conditions
 are met, and the user can explain how they have met those obligations.
 The key features of this approach are as follows:
 \begin{paragraph}{Properties and proofs are represented in code.}
   Proofs are concrete entities within the host language, and can
   be analyzed or audited independently. In the tradition of
-  the Curry-Howard correspondence, propositions will be represented
+  the Curry-Howard correspondence, propositions are represented
   by types, and the proof of a proposition will be a value of that type.
 \end{paragraph}
 \begin{paragraph}{Proofs carried by phantom type parameters.}
