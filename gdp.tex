@@ -296,8 +296,8 @@ gdpEndpts = do
 
 No matter the language, a programmer often has to write functions
 that place constraints on their input. For example, the venerable
-\texttt{head} function for extracting the first element of a list
-asks its users to only hand it a non-empty list to operate on.
+\texttt{head} function will extract the first element of a list,
+but asks its users to only give it a non-empty list to operate on.
 Now put yourself in the shoes of \texttt{head}'s author: how can
 you ensure that \texttt{head} will be used properly? Let us recount
 a variety of strategies used in the wild.
@@ -319,7 +319,7 @@ Often the simplest approach is
 
 \paragraph{Returning a value with an option type.}
   A similar ``dummy value'' strategy
-  for languages with stricter typing discipline is to use an ``option type'' such
+  for languages with stricter typing discipline is to use an ``option type,'' such
   as Haskell's \texttt{Maybe} or Scala's \texttt{Option}. A value of type \texttt{Maybe T}
   cannot be used where a value of type \texttt{T} was expected, so the user must
   explicitly pattern match on the optional value to extract the result and handle the
@@ -330,10 +330,13 @@ Often the simplest approach is
 Finally, the API designer may select more restrictive types for the inputs in order
 to make the function total. For example, some Haskell libraries make use of the
 \texttt{NonEmpty} type for lists that contain at least one element. The \texttt{head}
-function then becomes total. Rather than handling a failure case, the user only
-needs to prove that their list is non-empty by making use of the smart constructor
-\texttt{nonEmpty :: [a] -> Maybe (NonEmpty a)}. The primary drawback
-is that the new types cannot be used with other APIs designed for the original type.
+function then becomes total. The user 
+can prove that their list is non-empty by making use of the smart constructor
+\texttt{nonEmpty :: [a] -> Maybe (NonEmpty a)}.\\
+The drawbacks include duplication
+(do we re-implement \texttt{length} for \texttt{NonEmpty}?)
+and awkwardness when encoding preconditions that relate
+several inputs (\textit{e.g.} requiring two lists to have the same length).
 
 \subsection{Leading the user into temptation}
 The ``return-an-optional-value'' idiom is well-known and popular in the functional
@@ -378,17 +381,16 @@ We can do better than this.
 
 \subsection{An alternative: Ghosts of Departed Proofs}
 In the following sections, we will elaborate a design concept for
-creating libraries that support a dialogue between
+creating libraries that supports a dialogue between
  library and  user: the library can require that certain conditions
 are met, and the user can explain how they have met those obligations.
 The key features of this approach are as follows:
-\begin{paragraph}{Properties and proofs are represented in code.}
+\paragraph{Properties and proofs are represented in code.}
   Proofs are concrete entities within the host language, and can
   be analyzed or audited independently. In the tradition of
   the Curry-Howard correspondence, propositions are represented
   by types, and the proof of a proposition will be a value of that type.
-\end{paragraph}
-\begin{paragraph}{Proofs carried by phantom type parameters.}
+\paragraph{Proofs carried by phantom type parameters.}
   To ensure that proof-carrying code does not have a run-time cost, proofs will only
   be used to inhabit types that appear as \emph{phantom type variables} attached to
   \texttt{newtype} wrappers.
@@ -399,8 +401,7 @@ The key features of this approach are as follows:
   The name ``ghost proof'' is meant to suggest the related concept of \emph{ghost variables} in software
   verification \cite{leavens1999jml}, and to emphasize the idea that the proof is non-corporeal: no
   artifacts related to the proof should ever be discernible from the compiler's output.
-\end{paragraph}
-\begin{paragraph}{Library-controlled APIs to create proofs.}
+\paragraph{Library-controlled APIs to create proofs.}
   Library authors should retain control over how domain-relevant proofs can be created.
   That is, the library author should be the only one able to introduce new axioms about
   the behavior of their API.
@@ -409,13 +410,11 @@ The key features of this approach are as follows:
 %%subtypes (\texttt{classify} in \cref{size-evidence})
 or that introduce existentially-quantified properties (\texttt{name} in \Cref{name-module}, or \texttt{withMap}
 in \Cref{justified-api}).
-\end{paragraph}
-\begin{paragraph}{Combinators for manipulating ghost proofs.}
+\paragraph{Combinators for manipulating ghost proofs.}
   Libraries may export a selection of combinators so that the user can
   mix and match the evidence at hand to produce a satisfactory proof of a
   safety property. The goal is to enrich the vocabulary of the user, so
   that they can productively communicate their proofs to the library.
-\end{paragraph}
 
 
 \subsection{The structure of this paper}
@@ -431,14 +430,14 @@ they should be able to explain \emph{why} to the library!
 
 The GDP design concept is relatively simple to implement. Each case study includes example library code,
 along with usage examples. The examples in this paper are self-contained, and are bundled together in
-a project suitable for experimentation, available in this paper's \texttt{git} repository \cite{this}.
+a project suitable for further experimentation \cite{this}.
 
 
 \section{Case Study \#1: Sorted lists}
 
-Surely every programmer has, at some time, had to work with collections of
-lists that were required to be sorted in one way or another. Within some
-context, the programmer may need to ensure that certain invariants hold, such
+It is almost inevitable that a programmer will, at some point, be asked to work
+with lists that have been sorted in one way or another. To ensure correctness,
+the programmer may need to ensure that certain invariants hold, such
 as ``all of these lists have been sorted by the same comparator''. For a concrete
 example, consider these \texttt{sortBy} and \texttt{mergeBy} functions:
 \begin{minted}[frame=none]{haskell}
@@ -457,10 +456,10 @@ mergeBy comp xs ys = go xs ys
       _  -> x : go xs' (y:ys')
 \end{minted}
 This efficient $O(n+m)$ implementation of \texttt{mergeBy} is easy to write,
-but it comes at a cost to the end user. Anybody who uses \texttt{mergeBy}
+but it comes with a hidden cost to the end user. Anybody who uses \texttt{mergeBy}
 must ensure that the two input lists have been sorted by the same comparator.
-If the user accidentally fails to sort the two inputs in the same way, \texttt{mergeBy}
-will quietly produce nonsense, possibly leading to a subtle bug.
+If the user accidentally fails to sort the two inputs, or does not sort them in the same way,
+\texttt{mergeBy} will quietly produce nonsense and introduce a subtle bug.
 
 It would be possible to implement a version of \texttt{mergeBy} that
 carefully inspected the inputs \texttt{xs} and \texttt{ys} as it
@@ -530,8 +529,8 @@ then check that the comparators matched. But this has a run-time cost for carryi
 around the comparator references, and it still would require \texttt{mergeBy} to
 return \texttt{Nothing} if it was given bogus arguments.
 
-A different solution is to introduce a \texttt{newtype} wrapper equipped with
-a phantom type parameter \texttt{name}, as in \Cref{name-module}.
+A different solution, in line with the GDP concept, is to introduce a \texttt{newtype} wrapper equipped with
+a phantom type parameter \texttt{name}.
 In code, we will write this wrapper as \verb|a ~~ n|, to be read as
 ``values of type \texttt{a} with name \texttt{n}''. To ensure that there is no
 run-time penalty for using names, \verb|a ~~ n| is implemented as a \texttt{newtype}
@@ -628,7 +627,7 @@ the \emph{only} way to obtain a value of type \texttt{SortedBy comp [a]} is thro
 \texttt{sortBy} or \texttt{mergeBy} functions. The user is not allowed to assert that a
 list is \texttt{SortedBy comp} by fiat.
 
-The implementation is straightforward enough: we just coerce the name off of the comparator,
+The implementation is straightforward enough: we just coerce away the name of the comparator,
 apply the simpler version of \texttt{sortBy} from \texttt{Data.List}, and then
 introduce the \texttt{SortedBy comp} predicate by coercing the result. Since the coercions have
 no run-time effect, the code generated by the compiler for our GDP-style \texttt{sortBy} is
@@ -665,7 +664,7 @@ Then your program will not compile.
 \subsection{Aside: On the danger of naming a ghost}\label{ghost-danger}
 
 Let us return for a moment to the somewhat unusual type of \texttt{name} in \Cref{name-module}.
-Is all of this business about rank-2 types \emph{really} necessary, or is it all just ivory tower
+Is all of this business about rank-2 types \emph{really} necessary, or is it merely ivory tower
 bloviation?  You may well wonder, why not just have a function with a simple type like this:
 
 \begin{minted}[frame=none]{haskell}
@@ -738,7 +737,7 @@ disambiguate our version from the existing type in \texttt{Control.Monad.ST}.
 In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} proposed thinking of the \texttt{s} parameter as
 representing a name attached to a region of the heap \cite{timany2017logical}.
 Informally, we can think of \texttt{ST s a} as representing a \texttt{State} monad over
-\emph{named stores}, like so:
+\emph{named regions}, like so:
 \begin{minted}[frame=none]{haskell}
 data Region = Region
 type St s a = State (Region ~~ s) a
@@ -750,8 +749,8 @@ runSt action = name Region (evalState action)
 The notion of treating the \texttt{ST} monad's phantom type as a region name immediately leads to ideas for
 other primitives. Once we can name regions, why not go on to invent more detailed names to describe
 the minute contours of those regions? For example, let us add a binary type constructor $\cap$ so that \texttt{s $\cap$ s'}
-names the region at the intersection of \texttt{s} and \texttt{s'}. We are quickly led to an API similar to \Cref{st-sharing-api},
-but with a new capability: individual sub-computations, at their discretion, may decide to share mutable reference cells with other sub-computations.
+names the region at the intersection of \texttt{s} and \texttt{s'}. We are quickly led to an API similar to \Cref{st-sharing-api} that
+supports a new capability: individual sub-computations, at their discretion, may decide to share mutable reference cells with other sub-computations.
 
 \begin{filecontents*}{st1.hs}
 runSt    :: (forall s. St s a) -> a
