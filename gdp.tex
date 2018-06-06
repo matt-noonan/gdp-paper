@@ -138,13 +138,13 @@
   preconditions were correctly met.
   
   In this paper, we introduce an API design concept called ``ghosts of departed
-  proofs''. The key idea is that sophisticated preconditions can be
+  proofs''. At its core is the observation that sophisticated preconditions can be
   encoded in Haskell's type system with no run-time overhead, by using proofs
   that inhabit phantom type parameters attached to \texttt{newtype} wrappers.
   The user expresses correctness arguments by constructing proofs to inhabit
   these phantom type parameters. Critically, this technique allows the
   library \emph{user} to decide when and how to validate that the API's preconditions
-  have been met.
+  are met.
 
   The ``ghosts of departed proofs'' approach to API design can achieve many of the benefits
   of dependent types and refinement types, yet only requires some minor and well-understood
@@ -437,8 +437,8 @@ a project suitable for further experimentation \cite{this}.
 
 It is almost inevitable that a programmer will, at some point, be asked to work
 with lists that have been sorted in one way or another. To ensure correctness,
-the programmer may need to ensure that certain invariants hold, such
-as ``all of these lists have been sorted by the same comparator''. For a concrete
+the programmer may need to carefully manage various invariants, such
+as ``all of these lists must have been sorted by the same comparator''. For a concrete
 example, consider these \texttt{sortBy} and \texttt{mergeBy} functions:
 \begin{minted}[frame=none]{haskell}
 sortBy  :: (a -> a -> Ordering) -> [a] -> [a]
@@ -557,11 +557,11 @@ class The d a | d -> a where
     the = coerce
 \end{minted}
 By using this default signature for \texttt{the}, most instances of \texttt{The}
-can be declared with an empty body, like so:
+can be declared with an empty body:
 \begin{minted}[frame=none]{haskell}
 instance The (a ~~ name) a
 \end{minted}
-By using a safe coercion, we can help ensure that stripping the name from a value
+By using a safe coercion, we can help ensure that removing the name from a value
 incurs no run-time cost.
 
 \begin{filecontents*}{ordered.hs}
@@ -993,26 +993,6 @@ much information should be added. For example, the user may well want to argue t
 every key \emph{other} than the deleted one is still present in a map modified by
 \texttt{deleting}, but the API provides no straightforward way to do this.
 
-\begin{filecontents*}{defn.hs}
--- Continuing module Named:
-data Defn = Defn -- Type exported, constructor hidden.
-
-type Defining f = (Coercible f Defn, Coercible Defn f)
-
-defn :: Defining f => a -> (a ~~ f)
-defn = coerce
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{defn.hs}
-  \caption{Extending the \texttt{Named} module with
-    an API that allows library authors to introduce
-    special names by fiat. The \texttt{Defining} typeclass
-    leverages \texttt{GHC}'s magic \texttt{Coercible} class \cite{Breitner:2014:SZC:2692915.2628141},
-    ensuring that \texttt{defn} is available a library's author but not
-    to the library's users. \Cref{lemma-demo} provides a usage example.}
-\end{figure}
-
 \begin{filecontents*}{delete1.hs}
 newtype Insert k v m = Insert Defn
 newtype Delete k m   = Delete Defn
@@ -1033,21 +1013,21 @@ delete k m = defn (Map.delete (bare k) (bare m))
 \end{filecontents*}
 \begin{filecontents*}{delete2.hs}
 subset_elts :: (a #$\subseteq$# b) -> (x #$\in$# a) -> Proof (x #$\in$# b)
-subset_elts _ = sorry
+subset_elts _ = axiom -- or import from a theory library
 
 insert_supset :: Proof (Keys m #$\subseteq$# Keys (Insert k v m))
-insert_supset = sorry
+insert_supset = axiom
 
 key_is_present :: Proof (k #$\in$# Insert k v m)
-key_is_present = sorry
+key_is_present = axiom
 
 delete_subset :: Proof (Keys (Delete k m) #$\subseteq$# Keys m)
-delete_subset = sorry
+delete_subset = axiom
 
 key_is_missing  :: (k' #$\in$# Keys m)
                 -> Not (k == k')
                 -> Proof (k' #$\in$# Keys (Delete k m))
-key_is_missing _ _ = sorry                
+key_is_missing _ _ = axiom                
 \end{filecontents*}
 
 \begin{figure*}
@@ -1070,39 +1050,107 @@ key_is_missing _ _ = sorry
 \section{Case Study \#4: Arbitrary invariants}
 
 As a final case study, we investigate how the GDP technique can be used to
-create APIs that can enforce arbitrary conditions on functions. ****
+create APIs that can enforce arbitrary conditions on functions.
+
+In the previous case studies, we saw how introducing names and predicates can
+help us develop safe APIs that allow the user to express correctness proofs.
+However, there are a few aspects that remained awkward.
+
+First, we have several
+ways that a name-like entity could be introduced: either via the \texttt{name} operator
+itself, or through other library-defined rank-2 functions like \texttt{runSt2} or \texttt{withMap}.
+It would be nice if the same mechanism could be used for all of these cases.
+
+Second, we made extensive use of ghostly proofs carried by phantom type parameters. But these
+phantom types needed something to attach to, so we introduced various domain-specific \texttt{newtype}
+wrappers such as \texttt{SortedBy}, \texttt{$\in$}, and \texttt{JMap}. Each library exported its own
+idiosyncratic proof combinators for working with its \texttt{newtype} wrappers. It would be better to have
+a uniform mechanism for expressing, carrying, and manipulating these proofs.
+
+In this case study, we will consider what kind of APIs we could write if we separated
+type-level names for each value from the constraints we want to place on those values.
+For example, let us return to the \texttt{head} function. We want ensure that the
+user only calls \texttt{head} on a list \texttt{xs} with outer constructor \texttt{(:)} (``cons'').
+To express this condition, we introduce one more \texttt{newtype} wrapper,
+written \texttt{:::} and pronounced ``such that''. Altogether, the phrase 
+\verb|(a ~~ n ::: p)| should be read ``a value of type \texttt{a}, named \texttt{n}, such
+that condition \texttt{p} holds.''
+
+
+We can now write, very explicitly, the requirement that the library places on the user
+of \texttt{head}: the parameter, called \texttt{xs}, must have outermost constructor
+\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition:
+\begin{minted}[frame=none]{haskell}
+newtype IsCons xs = IsCons Defn
+head :: ([a] ~~ xs ::: IsCons xs) -> a
+head xs = case the xs of (x:_) -> x
+\end{minted}
+The \texttt{:::} type is similar to the \texttt{Refined} type from the \texttt{refinement} library \cite{refined},
+but it gains extra power when used together with names.
+In particular, names provide the mechanism that allows us to take predicates about specific values and
+encode them at the type level.
+The type \verb|([a] ~~ xs ::: IsCons xs)| becomes a statement about the particular list being passed to \texttt{head}.
+The library user is now free to come up with a proof of \texttt{IsCons xs} in whatever way they please.
+
+\subsection{An EDSL for ghostly proofs}
+Now that we have a mechanism for encoding arbitrary properties as phantom types, we must describe how the
+user will create proof terms to inhabit those phantoms. We begin with a very simple \texttt{Proof} type,
+with a single phantom type parameter and exactly one non-bottom value:
+\begin{minted}[frame=none]{haskell}
+data Proof p = QED deriving (Functor, Applicative, Monad)
+\end{minted} 
+From this simple beginning, we can encode all of the inference rules of natural deduction as functions that
+produce terms of type \texttt{Proof p}.
+\Cref{predicate-logic} gives a small taste of the basic syntax and encoded inference rules, along with
+a collection of combinators for building up larger proofs from smaller steps.
+The monad instance for \texttt{Proof} turns out to be very useful, enabling proofs to be written in
+\texttt{do}-notation. To give a sense of the flavor, consider this proof that $P \implies Q$ implies $\neg Q \implies \neg P$:
+\begin{minted}[frame=none]{haskell}
+contrapositive :: (p --> q)
+               -> Proof (Not q --> Not p)
+contrapositive p_implies_q =
+  impl_intro $ \not_q ->
+    not_intro $ \p -> do
+      q <- impl_elim p_implies_q p
+      contradicts q not_q
+\end{minted}
+
+\subsection{Naming library functions}
+A library author may want to export a lemma such as ``reversing a list twice gives the original list''.
+To express this idea, it is not sufficient to have a name for ``the original list''. We must also be able to
+name some of the library's functions. This observation finally reveals the motivation for  the \texttt{defn}
+function in \Cref{name-module}: we want the library author to be able to introduce new names for their own functions.
+In the case of the list-reversing lemma, the author could write:
+\begin{minted}[frame=none]{haskell}
+newtype Reverse xs = Reverse Defn
+
+reverse :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
+reverse xs = defn (Prelude.reverse (the xs))
+
+rev_lemma :: Proof (Reverse (Reverse xs) == xs)
+rev_lemma = axiom
+\end{minted}
+
+\subsection{...}
 
 The types used to enforce non-emptiness of the input to \texttt{gdpHead} in
 \Cref{idioms} is similar to the \texttt{Refined} type from the \texttt{refinement}***
 package. ***
 
-In this case study, let's consider what kind of APIs we could write if we separate
-type-level names for each value from the constraints we want to place on those values.
-For example, let us return to the \texttt{head} function. We want ensure that the
-user only calls \texttt{head} on a list \texttt{xs} with outer constructor \texttt{(:)} (``cons''). We can now write, very explicitly, the requirement that the library asks of the user
-when using \texttt{head}: the parameter, called \texttt{xs}, must have outermost constructor
-\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition:
-\begin{minted}{haskell}
-newtype IsCons xs = IsCons Defn
-head :: ([a] ~~ xs ::: IsCons xs) -> a
-\end{minted}
-Here, the \texttt{:::} should be read ``such that''; altogether, the phrase 
-\verb|(a ~~ n ::: p)| can be read ``a value of type \texttt{a}, named \texttt{n}, such
-that condition \texttt{p} holds.''
 
 The primary difference between names and other predicates is that a name, by construction,
 is permanently attached to a value, while predicates can be attached or detached from values
 more flexibly. Of course, it wouldn't do if a user could freely attach \emph{any} predicate to a value. Instead, we want to ***
 
 \begin{filecontents*}{pred.hs}
--- Type exported, constructor hidden (but see `sorry`)
+-- Type exported, constructor hidden (but see `axiom`)
 data Proof p = QED deriving (Functor, Applicative, Monad)
 
 -- Attaching predicates to values
 newtype a ::: p = SuchThat Defn
 
-because :: a -> Proof p -> (a ::: p)
-x `because` p = coerce x
+(...) :: a -> Proof p -> (a ::: p)
+x ...proof = coerce x
 
 -- Logical constants
 data TRUE
@@ -1111,18 +1159,21 @@ data p && q
 data p || q
 data p --> q
 data Not p
+data p == q
 
 -- Local inference rules (implementations all
 -- ignore parameters and return `QED`)
-and_intro   :: p -> q -> Proof (p && q)
-or_elimL    :: (p || q) -> Proof p
-impl_intro  :: (p -> Proof q) -> Proof (p --> q)
-contradicts :: p -> Not p -> Proof FALSE
-absurd      :: FALSE -> Proof p
+and_intro   :: p     ->   q       -> Proof (p && q)
+or_elimL    :: (p || q)           -> Proof p
+impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
+impl_elim   :: (p --> q)   ->  p  -> Proof q
+not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+contradicts :: p     ->   Not p   -> Proof FALSE
+absurd      :: FALSE              -> Proof p
   -- ... and many more
 
 -- Proof combinators (specialized from Control.Monad)
--- Carefuly fixity definitions allow easy composition
+-- Careful fixity definitions allow easy composition
 -- of linear proofs.
 (|$) :: p -> (p -> Proof q) -> Proof q 
 (|.) :: (p -> Proof q)
@@ -1132,10 +1183,10 @@ absurd      :: FALSE -> Proof p
 (|\) :: (p -> Proof q)
      -> ((p -> Proof q) -> Proof r) -> Proof r
 
--- Exported function that allowis library authors to
--- sassert arbitrary axioms about their API.
-sorry :: Proof p
-sorry = QED
+-- Exported function that allows library authors to
+-- assert arbitrary axioms about their API.
+axiom :: Proof p
+axiom = QED
 \end{filecontents*}
 
 \begin{figure}
@@ -1145,62 +1196,54 @@ sorry = QED
     \label{predicate-logic}}
 \end{figure}
 
-\begin{figure*}[t!]
-  \hspace{-2.5in}
-  \scalebox{0.6}{{
-  \begin{minipage}{\textwidth}
-    \begin{prooftree}
-      \AxiomC{}
-      \RightLabel{\scriptsize (p)}\UnaryInfC{$\texttt{IsNil}(x) \wedge |x| = 0$}
-      \UnaryInfC{$|x| = 0$}
-      \UnaryInfC{$0 = |x|$}
-      \AxiomC{}
-      \RightLabel{\scriptsize (eq)}\UnaryInfC{$|x| = 1 + n$}
-      \BinaryInfC{$0 = 1 + n$}
-      \AxiomC{}
-      \UnaryInfC{$\forall m \in \mathbb{N}.~ \neg (0 = 1 + m)$}
-      \UnaryInfC{$\neg (0 = 1 + n)$}
-      \BinaryInfC{$\bot$}
-      \UnaryInfC{$\texttt{IsCons}(x)$}
-      \RightLabel{\scriptsize (p)}\UnaryInfC{$\texttt{IsNil}(x) \wedge |x| = 0 \longrightarrow \texttt{IsCons}(x)$}
-      \AxiomC{}
-      \RightLabel{\scriptsize (q)}\UnaryInfC{$\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)|$}
-      \UnaryInfC{$\texttt{IsCons}(x)$}
-      \RightLabel{\scriptsize (q)}\UnaryInfC{$\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)| \longrightarrow \texttt{IsCons}(x)$}
-      \AxiomC{}
-      \UnaryInfC{$\forall \ell \in \texttt{List}_T.~ (\texttt{IsNil}(\ell) \wedge |\ell| = 0) \vee (\texttt{IsCons}(\ell) \wedge |\ell| = 1 + |\texttt{Tail}(\ell)|)$}
-      \UnaryInfC{$(\texttt{IsNil}(x) \wedge |x| = 0) \vee (\texttt{IsCons}(x) \wedge |x| = 1 + |\texttt{Tail}(x)|)$}
-      \TrinaryInfC{$\texttt{IsCons}(x)$}
-      \RightLabel{\scriptsize (eq)}\UnaryInfC{$|x| = 1 + n \longrightarrow \texttt{IsCons(x)}$}
-    \end{prooftree}
-  \end{minipage}
-    }
-  }
-  \caption{A proof that lists with nonzero length satisfy the \texttt{IsCons} predicate,
-      in natural deduction style. Compare with the same proof using the \texttt{Proof} monad
-      in listing ****; the steps after the \texttt{(|/)} operator correspond to the leftmost
-      deductions in this proof tree. Note a slight difference: the listing proves
-      $|x| = 1 + n \vdash \texttt{IsCons}(x)$, while the derivation in this figure
-      proves $\vdash |x| = 1 + n \longrightarrow \texttt{IsCons}(x)$.}
-\end{figure*}
+\subsection{Building theory libraries}
+In both the \texttt{St} and the \texttt{justified-containers} case studies,
+the library author exported proof combinators that encoded basic facts about
+the algebra of sets. Such redundancy is undesirable for the library authors,
+who have to do work, and also for the end user who has to remember dozens of
+variations on the same basic proof combinators.
 
-\begin{filecontents*}{nzlic.hs}
-nonzero_length_implies_cons
-  :: (Length xs == Succ n) -> Proof (IsCons xs)
+Luckily, it is simple to separate axioms and inference laws for specific theories
+from the libraries that make use of them. For example, we could publish a small
+library containing basic predicates and inference rules about sets, such as:
+\begin{minted}[frame=none]{haskell}
+newtype x #$\in$# xs  = Element   Defn
+newtype xs #$\subseteq$# ys = Subset    Defn
+newtype xs #$\cap$# ys = Intersect Defn
 
-nonzero_length_implies_cons eq =
-  do  toSpec length
-   |$ or_elimR and_elimL
-   |/ and_elimR
-   |. symmetric
-   |. transitive' eq
-   |. (contradicts' $$ zero_not_succ)
-   |. absurd
-\end{filecontents*}
+subset_elt :: (x #$\in$# xs) -> (xs #$\subseteq$# ys) -> Proof (x #$\in$# ys)
+subset_elt _ _ = axiom
 
-\inputminted{haskell}{nzlic.hs}
+intersect_subset :: Proof ((xs #$\cap$# ys) #$\subseteq$# xs)
+intersect_subset = axiom
 
-\subsection{Adding proof tactics}
+intersect_sym :: Proof (xs #$\cap$# ys == ys #$\cap$# xs)
+intersect_sym = axiom
+\end{minted}
+
+\subsection{Ghosts on the outside, proofs on the inside}
+Factoring common lemmas into theory modules helps ensure that
+the module exports give a sound model of the structure they are
+describing. The author only needs to check the validity of their own
+theory module; others can then re-use that validation for free.
+
+But how can the author of a theory library be confident that they wrote down
+the correct lemmas in the first place? There is always the ``think very hard
+about it'' approach, but we can do better. Formal verification tools like
+Liquid Haskell \cite{vazou2016liquid} or \texttt{hs-to-coq} \cite{spector2018total}
+can be applied by the author of the theory library to ensure that it presents a
+sound interface. Note that the tooling is only needed by the author of the library;
+the end-users of the theory library only need to use plain Haskell.
+
+An extra level of confidence can be obtained by splitting the theory library
+into \texttt{Assumed} and \texttt{Derived} submodules. A small, core set of
+axioms are placed in the \texttt{Assumed} module and possibly checked by
+external tools. A larger set of lemmas, derived from these axioms using GDP
+proof combinators, resides in the \texttt{Derived} submodule. This separation
+allows the library author to build up a large collection of lemmas from a
+small---and hopefully easy-to-verify---set of basic axioms.
+
+\subsection{Building custom proof tactics}
 
 For simple properties, the task of writing a proof is not too difficult. But for
 more sophisticated properties, the deployment of \emph{proof tactics} becomes
@@ -1272,10 +1315,12 @@ proof2 = tableaux
     \label{tableaux-example}}
 \end{figure}
 
-\subsection{Refinement types via phantom predicates}
 
-(cite the \texttt{refined} library here) \cite{refined}
 
+\bibliographystyle{abbrvnat}
+
+\bibliography{gdp.bib}
+\appendix
 
 \section{MAKE THIS GO AWAY: Faux dependent types}
 
@@ -1451,17 +1496,5 @@ allows the same library functions on a wide variety of *******.
 %% \end{minted}
 
    
-
-\bibliographystyle{abbrvnat}
-
-\bibliography{gdp.bib}
-%% \begin{thebibliography}{10}
-%%   \softraggedright
-  
-%% \bibitem[Berkeley (1734) Berkeley]{analyst}
-%%   G. Berkeley. \newblock The Analyst, a Discourse ADdressed to an Infidel Mathematician.
-%%   \newblock 1734.
-%% \end{thebibliography}
-
 
 \end{document}
