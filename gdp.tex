@@ -221,8 +221,8 @@ few well-understood extensions to the Damas-Hindley-Milner type system.
 
 An early success story is the \texttt{ST} monad, which allows pure
 computations to make use of local, mutable state. A phantom type parameter
-and a clever use of rank-2 types in the \texttt{ST} monad's API allows the
-compiler to ensure that the local mutable state is invisible from the outside,
+and a clever use of rank-2 types in the \texttt{ST} monad's API gives
+a compile-time guarantee that the local mutable state is invisible from the outside,
 and hence the resulting computation really \emph{is} pure. As we will see, this
 trick is just the tip of a rather large iceberg.
 
@@ -243,41 +243,40 @@ head xs = case xs of
 endpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
-  return (head xs, head $ reverse xs)
-
---------------------------------------------------------
+  if xs /= [] then return (head xs, head $ reverse xs)
+              else endpts
+----------------------------------------------------------
 -- Returning Maybe / Optional values. Safe, but requires
 -- the caller to pattern-match on the Maybe at every use,
 -- even when the list is known to be non-empty. Frustrated
 -- users cannot be blamed for using `fromJust`!
-safeHead :: [a] -> Maybe a
-safeHead xs = case xs of
+headMay :: [a] -> Maybe a
+headMay xs = case xs of
   (x:_) -> Just x
   []    -> Nothing
 
 safeEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
-  case safeHead xs of
-    Just x -> return (x, fromJust (safeHead $ reverse xs))
+  case headMay xs of
+    Just x -> return (x, fromJust (headMay $ reverse xs))
     _      -> safeEndpts
-
--------------------------------------------------------
+----------------------------------------------------------
 -- "Ghosts of Departed Proofs". Safe. Does not return
 -- an optional value; preconditions are checked early
 -- and carried by "ghosts" (specialized phantom types).
 rev_cons :: IsCons xs -> Proof (IsCons (Reverse xs))
 
-gdpHead :: (a ~~ xs ::: IsCons xs) -> a
-gdpHead xs = head (the xs)
+gdpHead :: ([a] ~~ xs ::: IsCons xs) -> a
+gdpHead xs = head (the xs) -- safe!
 
 gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
   name xs $ \xs -> case classify xs of
-    Right is_cons -> let ok = is_cons |$ rev_cons in
+    IsCons evidence -> let ok = evidence >>= rev_cons in
       return (gdpHead xs, gdpHead (gdpRev xs ...ok))
-    Left  _  -> gdpEndpts
+    IsNil  evidence -> gdpEndpts
 \end{filecontents*}
 
 \begin{figure}
@@ -289,7 +288,7 @@ gdpEndpts = do
     list is non-empty, combining the simplicity of the
     first example with the safety of the second. \texttt{rev\_cons}
     is a proof combinator exported by the library to help the
-    user prove that the reverse of a non-empty list is still non-empty. See
+    user prove that the reverse of a non-empty list is also non-empty. See
   \cref{sizing,size-evidence} for details.}
 \end{figure}
 
