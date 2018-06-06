@@ -28,6 +28,7 @@ library
                      , Examples.Dot
                      , Examples.Sorting
                      , Examples.St
+                     , Examples.Logic
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , mtl
