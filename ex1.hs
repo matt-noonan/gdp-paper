@@ -5,17 +5,15 @@ gdpRev xs = defn (reverse (the xs))
 length :: ([a] ~~ xs) -> (Integer ~~ Length xs)
 length xs = defn (Prelude.length (the xs))
 
-zipWith :: ((a -> b -> c) ~~ f)
+zipWith :: (a -> b -> c)
          -> ([a] ~~ xs ::: Length xs == n)
          -> ([a] ~~ ys ::: Length ys == n)
-         -> ([a] ~~ ZipWith f xs ys)
-zipWith f xs ys =
-  defn (Prelude.zipWith (the f) (the xs) (the ys))
+         -> [a]
+zipWith f xs ys = Prelude.zipWith f (the xs) (the ys)
 
 -- Names for API functions
-newtype Length  xs      = Length  Defn
-newtype ZipWith f xs ys = ZipWith Defn
-newtype Reverse xs      = Reverse Defn
+newtype Length  xs = Length  Defn
+newtype Reverse xs = Reverse Defn
 
 -- Lemmas (all bodies are `axiom`)
 rev_length :: Proof (Length (Reverse xs) == Length xs)

@@ -444,7 +444,7 @@ informal proofs to the library. If the user believes that a precondition has bee
 they should be able to explain \emph{why} to the library!
 
 The GDP design concept is relatively simple to implement. Each case study includes example library code,
-along with usage examples. The examples in this paper are self-contained, and are bundled together in
+along with usage demonstrations. The examples in this paper are self-contained, and are bundled together in
 a project suitable for further experimentation \cite{this}.
 
 
@@ -506,11 +506,9 @@ this proof to \texttt{mergeBy}?
 module Named
   (Named, type (~~), name, Defn, defn, Defining) where
 
-import The
 import Data.Coerce
 
 newtype Named name a = Named a
-instance The (Named name a) a
 type a ~~ name = Named name a
 
 -- Morally, the type of `name` is
@@ -633,7 +631,7 @@ main = do
 \subsection{Implementing a safe API for sorting and merging}
 Now that we know how to attach ghostly names to values, we can tackle the design of a
 safe and ergonomic interface to \texttt{mergeBy}. In \Cref{sorted-module}, we begin by defining
-a \texttt{newtype} wrapper \texttt{SortedBy comp} to that represents the predicate
+a \texttt{newtype} wrapper \texttt{SortedBy comp} that represents the predicate
 ``$x$ has been sorted by the comparator named \texttt{comp}''. The
 wrapper's meaning is imbued by the type of \texttt{sortBy}, which takes a \emph{named}
 comparator and a list, and produces a list that has been \texttt{SortedBy comp}.
@@ -767,6 +765,8 @@ the minute contours of those regions? For example, let us add a binary type cons
 names the region at the intersection of \texttt{s} and \texttt{s'}. We are quickly led to an API similar to \Cref{st-sharing-api} that
 supports a new capability: individual sub-computations, at their discretion, may decide to share mutable reference cells with other sub-computations.
 
+
+
 \begin{filecontents*}{st1.hs}
 runSt    :: (forall s. St s a) -> a
 
@@ -799,14 +799,6 @@ symm :: (a #$\in$# (s #$\cap$# s')) -> (a #$\in$# (s' #$\cap$# s))
   \inputminted{haskell}{st2.hs}
   \caption{Extending the state thread API with shared references.\label{st-sharing-api}}
 \end{figure}
-In effect, \texttt{runSt2} lets the user run a computation that makes use of
-two partially-overlapping memory regions. Within that computation, the user
-can run sub-computations bound to one or the other memory region. Furthermore,
-a sub-computation can move any variable that it owns into the common overlap
-via \texttt{share}. An example is shown in \Cref{st-example}, where one sub-computation
-creates two cells: one private, and the other shared. A second sub-computation has unconstrained
-access to the shared cell. Yet even though the private reference is also in scope during
-the second sub-computation, any attempts to access it will fail to compile.
 
 \begin{filecontents*}{st.hs}
 stSharingDemo :: Bool
@@ -834,21 +826,62 @@ stSharingDemo = runSt2 $ do
 \begin{figure}
   \inputminted{haskell}{st.hs}
   \caption{An \texttt{ST}-style pure computation using local mutable
-    references. By introducing two named regions at once, we can extend
-    the \texttt{ST} API with new capabilities such as shared references.
+    references. 
     Although the \texttt{secret} reference is in scope during the calculation
     in the ``right'' region, any attempted access will fail to compile.\label{st-example}}
 \end{figure}
 
+In effect, \texttt{runSt2} lets the user run a computation that makes use of
+two partially-overlapping memory regions. Within that computation, the user
+can run sub-computations bound to one or the other memory region. Furthermore,
+a sub-computation can move any variable that it owns into the common overlap
+via \texttt{share}. An example is shown in \Cref{st-example}, where one sub-computation
+creates two cells: one private, and the other shared. A second sub-computation has unconstrained
+access to the shared cell. Yet even though the private reference is also in scope during
+the second sub-computation, any attempts to access it will fail to compile.
+
 \section{Case Study \#3: Key-value lookups}
 
-In this section, we will perform a \textit{post mortem} on those
+It is not uncommon to find algorithms based around key-value maps that rely
+on certain keys being present at critical moments. For example, an evaluator for
+well-formed expressions with \texttt{let}-bindings may maintain a symbol table, subject to the
+invariant that any symbol found in the expression should have a corresponding entry in the
+symbol table. It may be awkward to write ``missing symbol'' handlers into the expression
+evaluator---doubly so if the API was designed in such a way that missing symbols are supposed to
+be impossible.
+
+In this case study, we will see how to use the GDP concept to build an API where the
+user can express the thought ``this key must be present in that map.''
+In the process, we will vindicate at least some of those
 2000 moments, forever enshrined on Hackage, where a programmer fell into
 the pit of despair and followed a map lookup by \texttt{fromJust}.
 
-It is instructive to compare the two functions \texttt{lookup :: k -> Map k v -> Maybe v}
-and \texttt{lookup :: (k $\in$ ks) -> JMap ks k v -> v}. We do not intend to claim that
-one of these is better than the other. Instead, the claim is that these two functions
+\Cref{justified-api} is a small, GDP-style API based on the \texttt{justified-containers}
+package. The key features are:
+\begin{itemize}
+\item A predicate \texttt{Key ks k}, meaning ``values of type \texttt{k}, belonging to
+  the set named \texttt{ks}.''
+\item A predicate \texttt{JMap ks k v}, meaning ``maps of type \texttt{Map k v}, with
+  a key set named \texttt{ks}.''
+\item The rank-2 \texttt{withMap} function, analogous to \texttt{name}, that attaches
+  a ghostly key set to a map. This function encodes the notion that any map has
+  \emph{some} set of keys.
+\item The \texttt{member} function. This function checks if a key is present in a map
+  with key set \texttt{ks} and,
+  if so, produces a ghost proof of that fact using \texttt{Key ks}.
+\item Finally, the function \texttt{lookup}. This function is total because the
+  key carries a ghost proof that it is present in the map. As a result, we can return
+  a \texttt{v} instead of a \texttt{Maybe v}, with no fear of run-time failure.
+\end{itemize}
+
+Note that proving a key can be found in a certain map does not mean it can \emph{only}
+be found in that map! In \Cref{justified-usage}, we see that some evidence can be re-used:
+we can find the same key in a whole variety of maps.
+
+\subsection{Designing to the user's state of knowledge}
+It is instructive to compare the two \texttt{lookup} types \texttt{k -> Map k v -> Maybe v}
+and \texttt{Key ks k -> JMap ks k v -> v}. We do not intend to claim that
+one of these is better than the other. Instead, the claim is much simpler: these two functions
 \emph{reflect different states of the user's knowledge}.
 
 If the user legitimately does not know whether or not a key is present, then the
@@ -859,32 +892,32 @@ and \texttt{Nothing} (key absent) cases.
 
 On the other hand, if the user already believes the key should be present based on some
 external evidence, then they will be happier writing a program that does not need to handle
-the impossible missing-key state. But they must demonstrate that evidence to the library
-somehow!  ****
+the impossible missing-key state. But to ensure safety, they must communicate that evidence to the library
+somehow; here, via the \texttt{Key ks} predicate.
 
 \subsection{Application: well-formed adjacency lists}
 
 The power of this method becomes more apparent when considering maps where
-the values are expected to reference the keys in some way. For example, a
-simple representation for directed graphs with vertex type \texttt{v} is:
+the values are expected to reference the keys in some way. Consider this
+simple representation for directed graphs that maps each vertex to its list of immediate neighbors:
 \begin{minted}[frame=none]{haskell}
 type Digraph v = Map v [v]
 \end{minted}
-mapping each vertex to its list of immediate neighbors. Well-formed \texttt{Digraph}s
+Well-formed \texttt{Digraph}s
 should satisfy the property that every vertex referenced in any neighbor list is also
 a valid key in the adjacency map.
 
-Traditionally, graph APIs using adjacency representations require well-formed
+Traditionally, graph APIs that use adjacency representations require well-formed
 graphs, but make it the user's responsiblity to ensure well-formedness. For example,
-the \texttt{Data.Graph} API from \texttt{containers} has a graph constructor that
-will silently discard edges with targets that do not appear in the node list.
+the \texttt{Data.Graph} API from \texttt{containers} has a constructor that
+will silently discard edges whose targets do not appear in the node list.
 %%In \texttt{C++}, \texttt{boost::adjacency\_list} has an \texttt{add\_edge} function
 %%that returns a \texttt{bool}. This value must be
 
-The GDP-style structure of the \texttt{justified-containers} API makes it easy to
-translate the notion of ``well-formed adjacency list'' into an invariant that can
+Our GDP-style API for maps gives us a vocabulary for
+translating the notion ``a well-formed adjacency list'' into an invariant that can
 be checked by the compiler. We simply write what we mean: a well-formed adjacency
-list is a map from vertices to a list of vertices that are keys of that same map.
+list is a map from vertices to a list of vertices that are keys of that \emph{same} map.
 In other words:
 \begin{minted}[frame=none]{haskell}
 type Digraph vs v = JMap vs v [Key vs v]
@@ -938,7 +971,7 @@ name test $ \table ->
     to check if a key is present in \texttt{table}; within the scope of the \texttt{Just} case, \texttt{key}
     carries a phantom proof of its presence in \texttt{table}. The same phantom proof can also be used as evidence that
     \texttt{key} is present certain other maps as well, such as \texttt{table'} (\texttt{table} with a
-    value changed) and \texttt{table''} (\texttt{table} modified by \texttt{fmap}).} 
+    value changed) and \texttt{table''} (\texttt{table} modified by \texttt{fmap}).\label{justified-usage}} 
 \end{figure}
 
 %%%% Maybe not so relevant?
@@ -967,24 +1000,26 @@ modify the key set of a map, we still know quite a lot about the keys in the upd
  Imagine you were a user, in possession of a key and a proof
 that it is present in the original map. It would be quite frustrating if  we were
 unable to use that same key freely in the expanded map!
-The library author, anticipating this need, should provide a proof combinator for
-turning a proof that \texttt{k} is a valid key of \texttt{m} into a proof that
-\texttt{k} is also a valid key of \texttt{insert k' v m} for any \texttt{k'}.
+The library author, anticipating this need, should provide a proof combinator that
+converts a proof of ``\texttt{k} is a valid key of \texttt{m}'' into a proof of
+``\texttt{k} is a valid key of \texttt{insert k' v m}.''
 
-To support this use-case, \texttt{justified-containers} provides the functions
-\texttt{inserting} and \texttt{deleting}, with these signatures:
-\begin{minted}{haskell}
-deleting  :: Ord k => Key ks k -> JMap ks k v
-          -> (forall ks'. JMap ks' k v
-                      -> (Key ks' k -> Key ks k)
-                      -> t)
-          -> t
-
+To support this use-case, \texttt{justified-containers} provides the rank-2
+functions \texttt{inserting}:
+\begin{minted}[frame=none]{haskell}
 inserting :: Ord k => k -> v -> JMap ks k v
           -> (forall ks'. JMap ks' k v
                        -> (Key ks k -> Key ks' k)
                        -> Key ks' k
                        -> t)
+          -> t
+\end{minted}
+and \texttt{deleting}:
+\begin{minted}[frame=none]{haskell}
+deleting  :: Ord k => Key ks k -> JMap ks k v
+          -> (forall ks'. JMap ks' k v
+                      -> (Key ks' k -> Key ks k)
+                      -> t)
           -> t
 \end{minted}
 Since these functions each result in maps with new key sets, we must
@@ -999,7 +1034,6 @@ the computation has access to:
   old map (a value of type \texttt{Key ks k}) into a proof that the key also belongs to the new map (a value of type \texttt{Key ks' k}).
 \item Evidence that the new key is present in the new key set.
 \end{enumerate}
-
 Similarly, the continuation for \texttt{deleting} has access to both the updated map
 and a representation of the inclusion of keys from the new map into the old map.
 
@@ -1009,11 +1043,12 @@ express the fact that the API is being used properly, but it is not always clear
 much information should be added. For example, the user may well want to argue that a
 every key \emph{other} than the deleted one is still present in a map modified by
 \texttt{deleting}, but the API provides no straightforward way to do this.
+In addition, it is a bit awkward to introduce yet \emph{another} collection of
+rank-2 functions to the API. In the final case study, we will investigate how
+the library author can separate API functions from the lemmas \emph{about} those
+functions.
 
 \section{Case Study \#4: Arbitrary invariants}\label{full-gdp}
-
-As a final case study, we investigate how the GDP technique can be used to
-create APIs that can enforce arbitrary conditions on functions.
 
 In the previous case studies, we saw how introducing names and predicates can
 help us develop safe APIs that allow the user to express correctness proofs.
@@ -1026,7 +1061,7 @@ It would be nice if the same mechanism could be used for all of these cases.
 
 Second, we made extensive use of ghostly proofs carried by phantom type parameters. But these
 phantom types needed something to attach to, so we introduced various domain-specific \texttt{newtype}
-wrappers such as \texttt{SortedBy}, \texttt{$\in$}, and \texttt{JMap}. Each library exported its own
+wrappers (\texttt{SortedBy}, \texttt{$\in$},  \texttt{JMap}). Each library exported its own
 idiosyncratic proof combinators for working with its \texttt{newtype} wrappers. It would be better to have
 a uniform mechanism for expressing, carrying, and manipulating these proofs.
 
@@ -1066,17 +1101,15 @@ gdpRev xs = defn (reverse (the xs))
 length :: ([a] ~~ xs) -> (Integer ~~ Length xs)
 length xs = defn (Prelude.length (the xs))
 
-zipWith :: ((a -> b -> c) ~~ f)
+zipWith :: (a -> b -> c)
          -> ([a] ~~ xs ::: Length xs == n)
          -> ([a] ~~ ys ::: Length ys == n)
-         -> ([a] ~~ ZipWith f xs ys)
-zipWith f xs ys =
-  defn (Prelude.zipWith (the f) (the xs) (the ys))
+         -> [a]
+zipWith f xs ys = Prelude.zipWith f (the xs) (the ys)
 
 -- Names for API functions
-newtype Length  xs      = Length  Defn
-newtype ZipWith f xs ys = ZipWith Defn
-newtype Reverse xs      = Reverse Defn
+newtype Length  xs = Length  Defn
+newtype Reverse xs = Reverse Defn
 
 -- Lemmas (all bodies are `axiom`)
 rev_length :: Proof (Length (Reverse xs) == Length xs)
@@ -1096,8 +1129,7 @@ classify xs = case the xs of
 dot :: ([Double] ~~ vec1 ::: Length vec1 == n)
     -> ([Double] ~~ vec2 ::: Length vec2 == n)
     -> Double
-dot vec1 vec2 = name (*) $ \mul ->
-  sum (the (zipWith mul vec1 vec2))
+dot vec1 vec2 = sum (zipWith (*) vec1 vec2)
 
 -- Compute the dot product of a list with its reverse.
 dot_rev :: [Double] -> Double
@@ -1157,15 +1189,16 @@ produce terms of type \texttt{Proof p}.
 \Cref{predicate-logic} gives a small taste of the basic syntax and encoded inference rules, along with
 a collection of combinators for building up larger proofs from smaller steps.
 The monad instance for \texttt{Proof} turns out to be very useful, enabling proofs to be written in
-\texttt{do}-notation. To get a sense of the flavor, see \texttt{proof1} in \Cref{tableaux-example}.
+\texttt{do}-notation. This embedded domain-specific language (EDSL) can be seen in action
+in \texttt{proof1} of \Cref{tableaux-example}.
 
 Once we have constructed a proof of type \texttt{Proof p}, we can attach that proof to any value of type \texttt{a}
 to get a value of type \verb|(a ::: p)|. Note that \texttt{p} will often be a proof \emph{about} the wrapped value,
-but that is not required! Any value can carry any proof; the only thing that binds a value to a proof it is carrying
-is the use of a name.
+but that is not required! Any value can carry any proof; the only thing that links a value to a proof it the use of a name.
 
 \subsection{Naming library functions}
-A library author may want to export a lemma such as ``reversing a list twice gives the original list''.
+To help the user create domain-relevant proofs, a library author may wish to export a lemma such
+as ``reversing a list twice gives the original list''.
 To express this idea, it is not sufficient to have a name for ``the original list''. We must also be able to
 name some of the library's functions. This observation finally reveals the motivation for  the \texttt{defn}
 function in \Cref{name-module}: we want to let the library author introduce new names for their own functions,
@@ -1307,7 +1340,6 @@ To trigger the custom tactic, we introduce an empty injective type family---hidd
 from the user---and a single exported function \texttt{tableaux}.
 \begin{minted}[frame=none]{haskell}
 type family ProofByTableaux p = p' | p' -> p
-
 tableaux :: ProofByTableaux p
 tableaux = error "proof by analytic tableaux."
 \end{minted}
@@ -1339,6 +1371,11 @@ instead of constructing a proof by hand.
 
 \section*{Summary}
 ****
+
+\subsection*{Acknowledgments}
+The author would like to thank Hillel Wayne, Philipp Kant, and Matt Parsons for
+their helpful feedback on a draft of this paper, and Input Output HK for supporting
+this work.
 
 \bibliographystyle{abbrvnat}
 

@@ -1,11 +1,9 @@
 module Named
   (Named, type (~~), name, Defn, defn, Defining) where
 
-import The
 import Data.Coerce
 
 newtype Named name a = Named a
-instance The (Named name a) a
 type a ~~ name = Named name a
 
 -- Morally, the type of `name` is
