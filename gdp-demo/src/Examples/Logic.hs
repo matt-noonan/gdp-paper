@@ -17,3 +17,8 @@ test2 = mp tableaux
 test3 :: ( ((p `Or` q) `And` (p `Or` r)) `Impl` (p `Or` (q `And` r))) `And` ((p `Or` (q `And` r)) `Impl` ((p `Or` q) `And` (p `Or` r)))
 test3 = tableaux
 
+type Contrapositive p q = (p `Impl` q) `Impl` (Not q `Impl` Not p)
+
+-- Tableau example
+test4 :: Contrapositive p q
+test4 = tableaux

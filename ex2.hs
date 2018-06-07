@@ -1,18 +1,10 @@
-import Sized
-
-dot :: List n Double -> List n Double -> Double
-dot xs ys = sum (the $ sZipWith (*) xs ys)
-
-dot :: ([Double] ~~ xs)
-    -> ([Double] ~~ ys ::: Length xs == Length ys)
+dot :: ([Double] ~~ vec1 ::: Length vec1 == n)
+    -> ([Double] ~~ vec2 ::: Length vec2 == n)
     -> Double
-dot xs ys = sum (the $ sZipWith (*) xs ys)
+dot vec1 vec2 = name (*) $ \mul ->
+  sum (the (zipWith mul vec1 vec2))
 
-main :: IO ()
-main = do
-  xs <- readLn
-  ys <- readLn
-  sizing xs $ \xs' -> do
-    case align xs' ys of
-      Nothing  -> putStrLn "Size mismatch!"
-      Just ys' -> print (dot xs' ys')
+-- Compute the dot product of a list with its reverse.
+dot_rev :: [Double] -> Double
+dot_rev xs = name xs $ \vec ->
+  dot (vec ...refl) (reverse vec ...rev_length)

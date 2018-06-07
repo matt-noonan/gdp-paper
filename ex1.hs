@@ -1,19 +1,31 @@
-{-# LANGUAGE RankNTypes #-}
-module Sized (Size, the, sZipWith, sizing, align) where
+-- API functions
+gdpRev :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
+gdpRev xs = defn (reverse (the xs))
 
-newtype List n a = List a
+length :: ([a] ~~ xs) -> (Integer ~~ Length xs)
+length xs = defn (Prelude.length (the xs))
 
-the :: List n a -> a
-the (List x) = x
+zipWith :: ((a -> b -> c) ~~ f)
+         -> ([a] ~~ xs ::: Length xs == n)
+         -> ([a] ~~ ys ::: Length ys == n)
+         -> ([a] ~~ ZipWith f xs ys)
+zipWith f xs ys =
+  defn (Prelude.zipWith (the f) (the xs) (the ys))
 
-sZipWith ::
-  (a -> b -> c) -> List n a -> List n b -> List n c
-sZipWith f xs ys = List (zipWith f (the xs) (the ys))
+-- Names for API functions
+newtype Length  xs      = Length  Defn
+newtype ZipWith f xs ys = ZipWith Defn
+newtype Reverse xs      = Reverse Defn
 
-sizing :: [a] -> (forall n. List n a -> t) -> t
-sizing xs k = k (List xs)
+-- Lemmas (all bodies are `axiom`)
+rev_length :: Proof (Length (Reverse xs) == Length xs)
+rev_rev    :: Proof (Reverse (Reverse xs) == xs)
+rev_cons   :: IsCons xs -> Proof (IsCons (Reverse xs))
 
-align :: List n a -> [b] -> Maybe (List n b)
-align xs ys = if length (the xs) == length ys
-              then Just (List ys)
-              else Nothing
+data ListCase xs = IsNil  (Proof (IsNil  xs))
+                 | IsCons (Proof (IsCons xs))
+
+classify :: ([a] ~~ xs) -> ListCase xs
+classify xs = case the xs of
+  []    -> IsNil  axiom
+  (_:_) -> IsCons axiom

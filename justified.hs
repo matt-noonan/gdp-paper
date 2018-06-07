@@ -1,10 +1,10 @@
 newtype JMap ks k v = JMap (Map k v) deriving Functor
-newtype k #$\in$# ks = Element k
+newtype Key  ks k   = Key k
 
 instance The (JMap ks k v) (Map k v)
-instance The (k #$\in$# ks) k
+instance The (Key ks k) k
 
-member   :: k -> JMap ks k v -> Maybe (k #$\in$# ks)
-lookup   :: (k #$\in$# ks) -> JMap ks k v -> v
-reinsert :: (k #$\in$# ks) -> v -> JMap ks k v -> JMap ks k v
+member   :: k -> JMap ks k v -> Maybe (Key ks k)
+lookup   :: Key ks k -> JMap ks k v -> v
+reinsert :: Key ks k -> v -> JMap ks k v -> JMap ks k v
 withMap  :: Map k v -> (forall ks. JMap ks k v -> t) -> t

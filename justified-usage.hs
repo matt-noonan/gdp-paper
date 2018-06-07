@@ -1,10 +1,8 @@
 test = Map.fromList [ (1, "Hello"), (2, "world!") ]
 
-name test $ \table -> name 1 $ \k ->
+name test $ \table ->
   case member k table of
-
     Nothing  -> putStrLn "Missing key!"
-
     Just key -> do
       let table'  = reinsert key "Howdy" table
           table'' = fmap (map upper) table
