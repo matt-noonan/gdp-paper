@@ -340,7 +340,7 @@ you ensure that \texttt{head} will be used properly? Let us recount
 a variety of strategies used in the wild.
 
 \paragraph{Run-time failure on bad inputs.}
-Often the simplest approach is
+The simplest approach is
   to have a function just fail on malformed inputs. The failure mode can
   be an immediate run-time error (as in Haskell's \texttt{head}), or result in
   undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
@@ -409,10 +409,10 @@ reveals over 2000 instances where the partial function
 result of \texttt{Data.Map}'s \texttt{lookup}. Each one
 of these instances is a vignette of a programmer
 falling into a pit of despair:
-they have a mental proof that a certain key must be
-present in the map, but possess no mechanism to
+they had a mental proof that a certain key must be
+present in the map, but possessed no mechanism for
 \emph{communicating} that proof to the
-\texttt{lookup} function. In frustration, they make the
+\texttt{lookup} function. In frustration, they made the
 pragmatic---but unsafe---decision to introduce partiality.
 
 \subsection{Who is to blame?}
@@ -458,7 +458,7 @@ The key features of this approach are as follows:
   This may mean exporting functions that create values with known properties, or that
   classify a value into mutually disjoint refinements,
 %%subtypes (\texttt{classify} in \cref{size-evidence})
-or that introduce existentially-quantified properties (\texttt{name} in \Cref{name-module}, or \texttt{withMap}
+or that introduce existentially-quantified properties (\texttt{name} in \Cref{name-module}, \texttt{runSt} in \Cref{st-api}, or \texttt{withMap}
 in \Cref{justified-api}).
 \paragraph{Combinators for manipulating ghost proofs.}
   Libraries may export a selection of combinators so that the user can
@@ -565,7 +565,7 @@ defn = coerce
     Haskell. The \texttt{Defining} typeclass
     leverages \texttt{GHC}'s magic \texttt{Coercible} class \cite{Breitner:2014:SZC:2692915.2628141},
     ensuring that \texttt{defn} is available a library's author but not
-    to the library's users. \Cref{lemma-demo} provides a usage example.\label{name-module}}
+    to the library's users. \Cref{lemma-demo} provides a usage example for \texttt{defn}.\label{name-module}}
 \end{figure}
 
 
@@ -586,7 +586,7 @@ around \texttt{a}, with a phantom type parameter \texttt{n}. A simple module for
 can be found in \Cref{name-module}; the key feature is the exported \texttt{name}
 function that expresses the concept ``any value can be given a name''.
 
-Since Haskell does not support existentially-quantified types, we have to jump through
+Since Haskell does not directly support existentially-quantified types, we have to jump through
 a small hoop with \texttt{name}. Instead of directly returning a value with a name attached,
 \texttt{name} says to the user ``tell me what you wanted to do with that named value,
 and I'll do it for you''. This slight-of-hand is responsible for the rank-2
@@ -783,7 +783,7 @@ extensions to the \texttt{ST} API.
 In \Cref{st-api} we recall the basic \texttt{ST} API \cite{launchbury1994lazy}, writing \texttt{St} to
 disambiguate our version from the existing type in \texttt{Control.Monad.ST}.
 
-In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} proposed thinking of the \texttt{s} parameter as
+In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} proposed to think of the \texttt{s} parameter as
 representing a name attached to a region of the heap \cite{timany2017logical}.
 Informally, we can think of \texttt{ST s a} as representing a \texttt{State} monad over
 \emph{named regions}, like so:
@@ -797,7 +797,7 @@ runSt action = name Region (evalState action)
 
 The notion of treating the \texttt{ST} monad's phantom type as a region name immediately leads to ideas for
 other primitives. Once we can name regions, why not go on to invent more detailed names to describe
-the minute contours of those regions? For example, let us add a binary type constructor $\cap$ so that \texttt{s $\cap$ s'}
+the minute contours of those regions? For example, let us see what happens if we add a binary type constructor $\cap$ so that \texttt{s $\cap$ s'}
 names the region at the intersection of \texttt{s} and \texttt{s'}. We are quickly led to an API similar to \Cref{st-sharing-api} that
 supports a new capability: individual sub-computations, at their discretion, may decide to share mutable reference cells with other sub-computations.
 
@@ -832,6 +832,7 @@ symm :: (a #$\in$# (s #$\cap$# s')) -> (a #$\in$# (s' #$\cap$# s))
 \end{figure}
 
 \begin{figure}
+  \vspace{1.5em}
   \inputminted{haskell}{st2.hs}
   \caption{Extending the state thread API with shared references.\label{st-sharing-api}}
 \end{figure}
@@ -860,7 +861,7 @@ stSharingDemo = runSt2 $ do
 \end{filecontents*}
 
 \begin{figure}
-  \vspace{3em}
+  \vspace{1.5em}
   \inputminted{haskell}{st.hs}
   \caption{An \texttt{ST}-style pure computation using local mutable
     references. 
@@ -875,7 +876,7 @@ a sub-computation can move any variable that it owns into the common overlap
 via \texttt{share}. An example is shown in \Cref{st-example}, where one sub-computation
 creates two cells: one private, and the other shared. A second sub-computation has unconstrained
 access to the shared cell. Yet even though the private reference is also in scope during
-the second sub-computation, any attempts to access it will fail to compile.
+the second sub-computation, any attempts to access it there will fail to compile.
 
 \section{Case Study \#3: Key-value lookups}
 
@@ -883,7 +884,7 @@ It is not uncommon to find algorithms based around key-value maps that rely
 on certain keys being present at critical moments. For example, an evaluator for
 well-scoped expressions may maintain a symbol table, subject to the
 invariant that any symbol found at an expression node should have a corresponding entry in the
-symbol table for that node. It may be awkward to write ``missing symbol'' handlers into the expression
+symbol table. It may be awkward to write ``missing symbol'' handlers into the expression
 evaluator---doubly so if the API was designed so that missing symbols are supposed to
 be impossible.
 
@@ -893,7 +894,7 @@ In the process, we will vindicate  some of those
 2000 moments, forever enshrined on Hackage, where a programmer fell into
 the pit of despair and followed a map lookup by \texttt{fromJust}.
 
-\Cref{justified-api} is a small, GDP-style API based on the \texttt{justified-containers}
+\Cref{justified-api} gives a small, GDP-style API based on the \texttt{justified-containers}
 package. The key features are:
 \begin{itemize}
 \item A predicate \texttt{Key ks}, meaning ``belongs to the key set named \texttt{ks}.''
@@ -908,7 +909,8 @@ package. The key features are:
   with key set \texttt{ks} and,
   if so, produces a ghost proof of that fact using \texttt{Key ks}.
 \item Finally, the function \texttt{lookup}. This function is total because the
-  key carries a ghost proof that it is present in the map. As a result, we can return
+  key carries a ghost proof that it is present in the map. As a result, \texttt{lookup}
+  can safely return
   a \texttt{v} instead of a \texttt{Maybe v}, with no fear of run-time failure.
 \end{itemize}
 
@@ -999,7 +1001,7 @@ name test $ \table ->
 \begin{figure}
   \inputminted{haskell}{justified.hs}
   \caption{A fragment of the API from \texttt{justified-containers}.
-    The GDP-style predicates \texttt{k $\in$ ks} and \texttt{JMap ks k v} are used to represent
+    The GDP-style predicates \texttt{Key ks k} and \texttt{JMap ks k v} are used to represent
     ``a value of type \texttt{k} belonging to the set \texttt{ks}'' and ``a map with key set \texttt{ks}'',
     respectively. \label{justified-api}}
 \end{figure}
@@ -1054,7 +1056,7 @@ arguments, but just what and how much? For example, the user may well want to ar
 every key \emph{other} than the new one is also present in the original map,
  but the API provides no straightforward way to do this.
 It is also somewhat awkward to introduce yet \emph{another}
-rank-2 functions to the API.
+rank-2 function to the API.
 
 In the final case study, we will investigate how
 the library author can separate API functions from the lemmas \emph{about} those
@@ -1078,6 +1080,52 @@ wrappers (\texttt{SortedBy}, \texttt{$\in$},  \texttt{JMap}). Each library expor
 idiosyncratic proof combinators for working with its \texttt{newtype} wrappers. It would be better to have
 a uniform mechanism for expressing, carrying, and manipulating these proofs.
 
+\begin{filecontents*}{pred.hs}
+-- Type exported, constructor hidden (but see `axiom`)
+data Proof p = QED deriving (Functor, Applicative, Monad)
+
+-- Attaching predicates to values
+newtype a ::: p = SuchThat Defn
+
+(...) :: a -> Proof p -> (a ::: p)
+x ...proof = coerce x
+
+-- Logical constants. We can use empty data declarations,
+-- because these types are only used as phantoms.
+data TRUE
+data FALSE
+data p && q
+data p || q
+data p --> q
+data Not p
+data p == q
+
+-- Natural deduction rules (implementations all
+-- ignore parameters and return `QED`)
+and_intro   :: p     ->   q       -> Proof (p && q)
+or_elimL    :: (p || q)           -> Proof p
+impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
+impl_elim   :: (p --> q)   ->  p  -> Proof q
+not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+contradicts :: p     ->   Not p   -> Proof FALSE
+absurd      :: FALSE              -> Proof p
+refl        ::                       Proof (x == x)
+  -- ... and many more
+
+-- Exported function that allows library authors to
+-- assert arbitrary axioms about their API.
+axiom :: Proof p
+axiom = QED
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{pred.hs}
+  \caption{Basic constants and functions for building up the ``proofs''
+    in ``ghosts of departed proofs''. 
+    \label{predicate-logic}}
+\end{figure}
+
+
 In this case study, we will consider what kind of APIs we could write if we separated
 type-level names from the constraints we want to place on the named values.
 For example, let us return to the \texttt{head} function. We want ensure that the
@@ -1090,7 +1138,8 @@ that condition \texttt{p} holds.''
 
 We can now write, very explicitly, the requirement that our library places on the user
 of \texttt{head}: the parameter, called \texttt{xs}, must have outermost constructor
-\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition:
+\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition
+of \texttt{gdpHead}:
 \begin{minted}[frame=none]{haskell}
 newtype IsNil  xs = IsNil  Defn
 newtype IsCons xs = IsCons Defn
@@ -1100,7 +1149,7 @@ gdpHead xs = case the xs of (x:_) -> x
 \end{minted}
 The \texttt{:::} type is similar to the \texttt{Refined} type from the \texttt{refinement} library \cite{refined},
 but it gains extra power when used together with names.
-In particular, names provide the mechanism that allows us to take predicates about specific values and
+In particular, names provide the mechanism that allows us to take predicates about \emph{specific} values and
 encode them at the type level.
 The type \verb|([a] ~~ xs ::: IsCons xs)| becomes a statement about the particular list being passed to \texttt{gdpHead}.
 The library user is now free to come up with a proof of \texttt{IsCons xs} in whatever way they please.
@@ -1158,7 +1207,6 @@ dot_rev xs = name xs $ \vec ->
        \label{lemma-demo}}
 \end{figure}
 \begin{figure}
-  \vspace{1em}
     \inputminted{haskell}{ex2.hs}
     \caption{A user-defined dot product function that can only be used on same-sized lists,
       and a usage example. In the implementation of \texttt{dot\_rev}, the user expresses a proof that
@@ -1182,11 +1230,11 @@ proof1 =
 proof2 = tableaux
 \end{filecontents*}
 
-\begin{figure}
+\begin{figure}[b]
   \inputminted{haskell}{tableaux.hs}
   \caption{Proving the same theorem in two different ways. The first proof
     uses the \texttt{Monad} instance for
-    \texttt{Proof} and the inference rules from \Cref{predicate-logic}. The second
+    \texttt{Proof} and the deduction rules from \Cref{predicate-logic}. The second
     proof uses a typechecker plugin, exposed through the \texttt{tableaux}
     function (\Cref{tactics}).
     \label{tableaux-example}}
@@ -1202,8 +1250,7 @@ From this humble beginning, we can encode all of the rules of natural deduction 
 produce terms of type \texttt{Proof p}.
 \Cref{predicate-logic} gives a small taste of the basic syntax and encoded deduction rules.
 
-Once we have constructed a proof of type \texttt{Proof p}, we can use the \texttt{(...)} operator to attach that proof to a value of type \texttt{a}
-to produce a value of type \verb|(a ::: p)|. Note that \texttt{p} will often be a proof \emph{about} the wrapped value,
+Once we have constructed a proof of type \texttt{Proof p}, we can use the \texttt{(...)} operator to attach that proof to a value of type \texttt{a}, producing a value of type \verb|(a ::: p)|. Note that \texttt{p} will often be a proof \emph{about} the wrapped value,
 but that is not required! Any value can carry any proof; the only thing that links value to proof is the use of a common name.
 
 
@@ -1238,51 +1285,6 @@ without modifying its signature. Furthermore, it also becomes easy to
 create lemmas that relate multiple functions, such as \verb|rev_length|
 and \verb|rev_cons| in \Cref{lemma-demo}.
 
-\begin{filecontents*}{pred.hs}
--- Type exported, constructor hidden (but see `axiom`)
-data Proof p = QED deriving (Functor, Applicative, Monad)
-
--- Attaching predicates to values
-newtype a ::: p = SuchThat Defn
-
-(...) :: a -> Proof p -> (a ::: p)
-x ...proof = coerce x
-
--- Logical constants. We can use empty data declarations,
--- because these types are only used as phantoms.
-data TRUE
-data FALSE
-data p && q
-data p || q
-data p --> q
-data Not p
-data p == q
-
--- Natural deduction rules (implementations all
--- ignore parameters and return `QED`)
-and_intro   :: p     ->   q       -> Proof (p && q)
-or_elimL    :: (p || q)           -> Proof p
-impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
-impl_elim   :: (p --> q)   ->  p  -> Proof q
-not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
-contradicts :: p     ->   Not p   -> Proof FALSE
-absurd      :: FALSE              -> Proof p
-refl        ::                       Proof (x == x)
-  -- ... and many more
-
--- Exported function that allows library authors to
--- assert arbitrary axioms about their API.
-axiom :: Proof p
-axiom = QED
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{pred.hs}
-  \caption{Basic constants and functions for building up the ``proofs''
-    in ``ghosts of departed proofs''. 
-    \label{predicate-logic}}
-\end{figure}
-
 \subsection{Building theory libraries}
 In both the \texttt{St} and the \texttt{justified-containers} case studies,
 the library author exported proof combinators that encoded basic facts about
@@ -1298,14 +1300,10 @@ newtype x #$\in$# xs  = Element   Defn
 newtype xs #$\subseteq$# ys = Subset    Defn
 newtype xs #$\cap$# ys = Intersect Defn
 
-subset_elts :: (a #$\subseteq$# b) -> (x #$\in$# a) -> Proof (x #$\in$# b)
-subset_elts _ _ = axiom
-
+-- All implementation bodies are `axiom`
+subset_elts      :: (a #$\subseteq$# b) -> (x #$\in$# a) -> Proof (x #$\in$# b)
 intersect_subset :: Proof ((a #$\cap$# b) #$\subseteq$# a)
-intersect_subset = axiom
-
-intersect_sym :: Proof (a #$\cap$# b == b #$\cap$# a)
-intersect_sym = axiom
+intersect_sym    :: Proof (a #$\cap$# b == b #$\cap$# a)
 \end{minted}
 This same theory library could be used to reason about shared \texttt{St}
 regions and about key sets for maps, already achieving code reuse within
@@ -1347,12 +1345,12 @@ proving one particular class of theorems. For example, the \texttt{Coq} tactic
 
 Tactics are often designed with a specific domain in mind; to be most useful,
 theory creators (and library authors) should be able to create their own tactics
-when needed. The author of  a library dealing  with fixed-width numeric types
-may be able to create domain-specific proof tactics based around the theory of bitvectors.
+when needed. For example, the author of  a library for  fixed-width numeric types
+may wish to create domain-specific proof tactics based around the theory of bitvectors.
 
 One approach to providing custom tactics is to leverage \texttt{GHC}'s support for
 \emph{type-checker plugins}. These plugins hook into \texttt{GHC}'s $\textsf{OutsideIn}(X)$
-inference algorithm \cite{vytiniotis2011outsidein}, teaching the algorithm how to solve
+inference algorithm \cite{vytiniotis2011outsidein}, teaching it to solve
 new kinds of type constraints.
 
 As a proof-of-concept, we developed a simple typechecker plugin that implements
@@ -1369,7 +1367,7 @@ tableaux :: ProofByTableaux p
 tableaux = error "proof by analytic tableaux."
 \end{minted}
 Morally, we want to think of \texttt{ProofByTableaux p} as an alias for \texttt{p}.
-The trick is that our plugin will first check that the proposition \texttt{p} is
+The trick is that our plugin will first get a chance to check that the proposition \texttt{p} is
 a valid formula of predicate logic. Only then will the plugin allow \texttt{GHC}
 to replace \texttt{ProofByTableaux p} with \texttt{p}.
 
@@ -1401,7 +1399,7 @@ safety arguments, GDP-style APIs avoid
 the need for partial functions or optional returns. Using this approach, we are able to achieve
 many of the benefits of dependent types and refinement types, while only requiring mild
 and well-known extensions to Haskell 2010. 
-Try it with your own libraries, today!
+You can try it with your own libraries, today!
 
 \vspace{-0.4em}
 \subsection*{Acknowledgments}
