@@ -845,9 +845,9 @@ the second sub-computation, any attempts to access it will fail to compile.
 It is not uncommon to find algorithms based around key-value maps that rely
 on certain keys being present at critical moments. For example, an evaluator for
 well-formed expressions with \texttt{let}-bindings may maintain a symbol table, subject to the
-invariant that any symbol found in the expression should have a corresponding entry in the
-symbol table. It may be awkward to write ``missing symbol'' handlers into the expression
-evaluator---doubly so if the API was designed in such a way that missing symbols are supposed to
+invariant that any symbol found an expression node should have a corresponding entry in the
+symbol table for that node. It may be awkward to write ``missing symbol'' handlers into the expression
+evaluator---doubly so if the API was designed so that missing symbols are supposed to
 be impossible.
 
 In this case study, we will see how to use the GDP concept to build an API where the
