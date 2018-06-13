@@ -1065,6 +1065,52 @@ rank-2 functions.
 
 \section{Case Study \#4: Arbitrary invariants}\label{full-gdp}
 
+\begin{filecontents*}{pred.hs}
+-- Type exported, constructor hidden (but see `axiom`)
+data Proof p = QED deriving (Functor, Applicative, Monad)
+
+-- Attaching predicates to values
+newtype a ::: p = SuchThat a
+
+(...) :: a -> Proof p -> (a ::: p)
+x ...proof = coerce x
+
+-- Logical constants. We can use empty data declarations,
+-- because these types are only used as phantoms.
+data TRUE
+data FALSE
+data p && q
+data p || q
+data p --> q
+data Not p
+data p == q
+
+-- Natural deduction rules (implementations all
+-- ignore parameters and return `QED`)
+and_intro   :: p     ->   q       -> Proof (p && q)
+and_elimL   :: (p && q)           -> Proof p
+or_introL   :: p                  -> Proof (p || q)
+impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
+impl_elim   :: (p --> q)   ->  p  -> Proof q
+not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+contradicts :: p     ->   Not p   -> Proof FALSE
+absurd      :: FALSE              -> Proof p
+refl        ::                       Proof (x == x)
+         -- ... and many more
+-- Exported function that allows library authors to
+-- assert arbitrary axioms about their API.
+axiom :: Proof p
+axiom = QED
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{pred.hs}
+  \caption{Basic constants and functions for building up the ``proofs''
+    in ``ghosts of departed proofs''. 
+    \label{predicate-logic}}
+\end{figure}
+
+
 In the previous case studies, we saw how introducing names and predicates can
 help us develop safe APIs that allow the user to express correctness proofs.
 However, there are a few aspects that remained awkward.
@@ -1238,51 +1284,6 @@ The library author can add any number of lemmas about \texttt{gdpRev}
 without modifying its signature. Furthermore, it also becomes easy to
 create lemmas that relate multiple functions, such as \verb|rev_length|
 and \verb|rev_cons| in \Cref{lemma-demo}.
-
-\begin{filecontents*}{pred.hs}
--- Type exported, constructor hidden (but see `axiom`)
-data Proof p = QED deriving (Functor, Applicative, Monad)
-
--- Attaching predicates to values
-newtype a ::: p = SuchThat a
-
-(...) :: a -> Proof p -> (a ::: p)
-x ...proof = coerce x
-
--- Logical constants. We can use empty data declarations,
--- because these types are only used as phantoms.
-data TRUE
-data FALSE
-data p && q
-data p || q
-data p --> q
-data Not p
-data p == q
-
--- Natural deduction rules (implementations all
--- ignore parameters and return `QED`)
-and_intro   :: p     ->   q       -> Proof (p && q)
-and_elimL   :: (p && q)           -> Proof p
-or_introL   :: p                  -> Proof (p || q)
-impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
-impl_elim   :: (p --> q)   ->  p  -> Proof q
-not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
-contradicts :: p     ->   Not p   -> Proof FALSE
-absurd      :: FALSE              -> Proof p
-refl        ::                       Proof (x == x)
-         -- ... and many more
--- Exported function that allows library authors to
--- assert arbitrary axioms about their API.
-axiom :: Proof p
-axiom = QED
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{pred.hs}
-  \caption{Basic constants and functions for building up the ``proofs''
-    in ``ghosts of departed proofs''. 
-    \label{predicate-logic}}
-\end{figure}
 
 \subsection{Building theory libraries}
 In both the \texttt{St} and the \texttt{justified-containers} case studies,
