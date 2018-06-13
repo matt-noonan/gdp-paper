@@ -1,6 +1,6 @@
 test = Map.fromList [ (1, "Hello"), (2, "world!") ]
 
-name test $ \table ->
+withMap test $ \table ->
   case member k table of
     Nothing  -> putStrLn "Missing key!"
     Just key -> do

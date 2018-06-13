@@ -564,7 +564,7 @@ defn = coerce
     making use of a polymorphic continuation, is one way to emulate an existential type in
     Haskell. The \texttt{Defining} typeclass
     leverages \texttt{GHC}'s magic \texttt{Coercible} class \cite{Breitner:2014:SZC:2692915.2628141},
-    ensuring that \texttt{defn} is available a library's author but not
+    ensuring that \texttt{defn} is available to a library's author but not
     to the library's users. \Cref{lemma-demo} provides a usage example for \texttt{defn}.\label{name-module}}
 \end{figure}
 
@@ -983,7 +983,7 @@ withMap  :: Map k v -> (forall ks. JMap ks k v -> t) -> t
 \begin{filecontents*}{justified-usage.hs}
 test = Map.fromList [ (1, "Hello"), (2, "world!") ]
 
-name test $ \table ->
+withMap test $ \table ->
   case member k table of
     Nothing  -> putStrLn "Missing key!"
     Just key -> do
@@ -1079,52 +1079,6 @@ phantom types needed something to attach to, so we introduced various domain-spe
 wrappers (\texttt{SortedBy}, \texttt{$\in$},  \texttt{JMap}). Each library exported its own
 idiosyncratic proof combinators for working with its \texttt{newtype} wrappers. It would be better to have
 a uniform mechanism for expressing, carrying, and manipulating these proofs.
-
-\begin{filecontents*}{pred.hs}
--- Type exported, constructor hidden (but see `axiom`)
-data Proof p = QED deriving (Functor, Applicative, Monad)
-
--- Attaching predicates to values
-newtype a ::: p = SuchThat Defn
-
-(...) :: a -> Proof p -> (a ::: p)
-x ...proof = coerce x
-
--- Logical constants. We can use empty data declarations,
--- because these types are only used as phantoms.
-data TRUE
-data FALSE
-data p && q
-data p || q
-data p --> q
-data Not p
-data p == q
-
--- Natural deduction rules (implementations all
--- ignore parameters and return `QED`)
-and_intro   :: p     ->   q       -> Proof (p && q)
-or_elimL    :: (p || q)           -> Proof p
-impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
-impl_elim   :: (p --> q)   ->  p  -> Proof q
-not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
-contradicts :: p     ->   Not p   -> Proof FALSE
-absurd      :: FALSE              -> Proof p
-refl        ::                       Proof (x == x)
-  -- ... and many more
-
--- Exported function that allows library authors to
--- assert arbitrary axioms about their API.
-axiom :: Proof p
-axiom = QED
-\end{filecontents*}
-
-\begin{figure}
-  \inputminted{haskell}{pred.hs}
-  \caption{Basic constants and functions for building up the ``proofs''
-    in ``ghosts of departed proofs''. 
-    \label{predicate-logic}}
-\end{figure}
-
 
 In this case study, we will consider what kind of APIs we could write if we separated
 type-level names from the constraints we want to place on the named values.
@@ -1284,6 +1238,51 @@ The library author can add any number of lemmas about \texttt{gdpRev}
 without modifying its signature. Furthermore, it also becomes easy to
 create lemmas that relate multiple functions, such as \verb|rev_length|
 and \verb|rev_cons| in \Cref{lemma-demo}.
+
+\begin{filecontents*}{pred.hs}
+-- Type exported, constructor hidden (but see `axiom`)
+data Proof p = QED deriving (Functor, Applicative, Monad)
+
+-- Attaching predicates to values
+newtype a ::: p = SuchThat a
+
+(...) :: a -> Proof p -> (a ::: p)
+x ...proof = coerce x
+
+-- Logical constants. We can use empty data declarations,
+-- because these types are only used as phantoms.
+data TRUE
+data FALSE
+data p && q
+data p || q
+data p --> q
+data Not p
+data p == q
+
+-- Natural deduction rules (implementations all
+-- ignore parameters and return `QED`)
+and_intro   :: p     ->   q       -> Proof (p && q)
+and_elimL   :: (p && q)           -> Proof p
+or_introL   :: p                  -> Proof (p || q)
+impl_intro  :: (p -> Proof q)     -> Proof (p --> q)
+impl_elim   :: (p --> q)   ->  p  -> Proof q
+not_intro   :: (p -> Proof FALSE) -> Proof (Not p)
+contradicts :: p     ->   Not p   -> Proof FALSE
+absurd      :: FALSE              -> Proof p
+refl        ::                       Proof (x == x)
+         -- ... and many more
+-- Exported function that allows library authors to
+-- assert arbitrary axioms about their API.
+axiom :: Proof p
+axiom = QED
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{pred.hs}
+  \caption{Basic constants and functions for building up the ``proofs''
+    in ``ghosts of departed proofs''. 
+    \label{predicate-logic}}
+\end{figure}
 
 \subsection{Building theory libraries}
 In both the \texttt{St} and the \texttt{justified-containers} case studies,
