@@ -24,6 +24,7 @@ library
                      , Maps
                      , Tableaux
                      , Propositional
+                     , Arguments
                      , Solver.Tableaux
                      , Examples.Dot
                      , Examples.Sorting

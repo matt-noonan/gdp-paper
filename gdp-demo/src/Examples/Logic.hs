@@ -7,17 +7,17 @@ import Tableaux
 import Propositional
 
 
-test :: And p q `Impl` Or p q
+test :: Proof (p && q --> p || q)
 test = tableaux
 
-test2 :: And p q -> Or p q
-test2 = mp tableaux
+test2 :: p && q -> Proof (p || q)
+test2 = modus_ponens tableaux'
 
 -- Distributivity of Or over And
-test3 :: ( ((p `Or` q) `And` (p `Or` r)) `Impl` (p `Or` (q `And` r))) `And` ((p `Or` (q `And` r)) `Impl` ((p `Or` q) `And` (p `Or` r)))
+test3 :: Proof (( ((p || q) && (p || r)) --> (p || (q && r))) && ((p || (q && r)) --> ((p || q) && (p || r))))
 test3 = tableaux
 
-type Contrapositive p q = (p `Impl` q) `Impl` (Not q `Impl` Not p)
+type Contrapositive p q = Proof ( (p --> q) --> (Not q --> Not p))
 
 -- Tableau example
 test4 :: Contrapositive p q

@@ -4,10 +4,10 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
-
+{-# LANGUAGE ScopedTypeVariables   #-}
 module Named
   ( type (~~), name
-  , Defn, Defining, define
+  , Defn, Defining, defn, by_defn
   ) where
 
 import The
@@ -26,5 +26,11 @@ data Defn
 
 type Defining t = (Coercible t Defn, Coercible Defn t)
 
-define :: Defining x => a -> (a ~~ x)
-define = coerce
+defn :: Defining x => a -> (a ~~ x)
+defn = coerce
+
+by_defn :: forall p q. (Defining p, Defining q) => p -> q
+by_defn = from_defn . to_defn
+  where
+    to_defn   = coerce :: p -> Defn
+    from_defn = coerce :: Defn -> q

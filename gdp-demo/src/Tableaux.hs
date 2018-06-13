@@ -6,7 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 
-module Tableaux (plugin, tableaux) where
+module Tableaux (plugin, tableaux, tableaux') where
 
 import qualified Propositional as PL
 import Solver.Tableaux
@@ -62,10 +62,10 @@ thePlugin opts = TcPlugin
 
 data Solver = Solver
   { pbt   :: TyCon
-  , andTc :: TyCon
-  , orTc  :: TyCon
+  , andTc :: [TyCon]
+  , orTc  :: [TyCon]
   , notTc :: TyCon
-  , implTc :: TyCon
+  , implTc :: [TyCon]
   }
   
 pluginInit :: [CommandLineOption] -> TcPluginM Solver
@@ -74,14 +74,14 @@ pluginInit _opts = do
     pbtNm <- lookupName md (mkTcOcc "ProofByTableaux")
     pbt <- tcLookupTyCon pbtNm
     md' <- lookupModule propModule tableauxPackage
-    andNm <- lookupName md' (mkTcOcc "And")
-    andTc <- tcLookupTyCon andNm
-    orNm <- lookupName md' (mkTcOcc "Or")
-    orTc <- tcLookupTyCon orNm
+    andNm <- forM ["&&", "And"] $ \tc -> lookupName md' (mkTcOcc tc)
+    andTc <- mapM tcLookupTyCon andNm
+    orNm <- forM ["||", "Or"] $ \tc -> lookupName md' (mkTcOcc tc)
+    orTc <- mapM tcLookupTyCon orNm
     notNm <- lookupName md' (mkTcOcc "Not")
     notTc <- tcLookupTyCon notNm
-    implNm <- lookupName md' (mkTcOcc "Impl")
-    implTc <- tcLookupTyCon implNm
+    implNm <- forM ["-->", "Impl"] $ \tc -> lookupName md' (mkTcOcc tc)
+    implTc <- mapM tcLookupTyCon implNm
     return Solver{..}
   where
     tableauxModule  = mkModuleName "Tableaux"
@@ -118,8 +118,11 @@ applyTableaux _ _ _ = Nothing
 
 type family ProofByTableaux p = p' | p' -> p
 
-tableaux :: ProofByTableaux p
+tableaux :: PL.Proof (ProofByTableaux p)
 tableaux = error "proof by tableaux"
+
+tableaux' :: ProofByTableaux p
+tableaux' = error "proof by tableaux"
 
 evMagic :: Ct -> Maybe EvTerm
 evMagic ct = case classifyPredType $ ctEvPred $ ctEvidence ct of
@@ -132,10 +135,10 @@ solveTabl solver t = sat (evalState (typeToFormula t) (0, M.fromList []))
   where
     typeToFormula :: Type -> State (Int, M.Map Var Int) (Formula Int)
     typeToFormula = \case
-      TyConApp tc [p,q] | tc == andTc  solver -> And  <$> typeToFormula p <*> typeToFormula q
-      TyConApp tc [p,q] | tc == orTc   solver -> Or   <$> typeToFormula p <*> typeToFormula q
+      TyConApp tc [p,q] | tc `elem` andTc  solver -> And  <$> typeToFormula p <*> typeToFormula q
+      TyConApp tc [p,q] | tc `elem` orTc   solver -> Or   <$> typeToFormula p <*> typeToFormula q
       TyConApp tc [p]   | tc == notTc  solver -> Not  <$> typeToFormula p
-      TyConApp tc [p,q] | tc == implTc solver -> Impl <$> typeToFormula p <*> typeToFormula q
+      TyConApp tc [p,q] | tc `elem` implTc solver -> Impl <$> typeToFormula p <*> typeToFormula q
       TyVarTy v                               -> do
         (idx, ctx) <- get
         case M.lookup v ctx of
