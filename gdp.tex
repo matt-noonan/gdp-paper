@@ -785,7 +785,7 @@ disambiguate our version from the existing type in \texttt{Control.Monad.ST}.
 
 In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} proposed to think of the \texttt{s} parameter as
 representing a name attached to a region of the heap \cite{timany2017logical}.
-Informally, we can think of \texttt{ST s a} as representing a \texttt{State} monad over
+Informally, we can think of \texttt{ST s} as representing a \texttt{State} monad over
 \emph{named regions}, like so:
 \begin{minted}[frame=none]{haskell}
 data Region = Region
@@ -922,7 +922,7 @@ we can find the same key in a whole variety of maps.
 It is instructive to compare the two \texttt{lookup} types \texttt{k -> Map k v -> Maybe v}
 and \texttt{Key ks k -> JMap ks k v -> v}. We do not intend to claim that
 one of these is better than the other. Instead, the claim is much simpler: these two functions
-\emph{reflect different states of the user's knowledge}.
+\emph{reflect different expectations about the user's knowledge}.
 
 If the user legitimately does not know whether or not a key is present, then the
 \texttt{Maybe}-returning \texttt{lookup} is entirely appropriate. The user's incomplete knowledge
