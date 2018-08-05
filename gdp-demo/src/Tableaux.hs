@@ -6,7 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 
-module Tableaux (plugin, tableaux, tableaux') where
+module Tableaux (plugin, tableaux) where
 
 import qualified Propositional as PL
 import Solver.Tableaux
@@ -120,9 +120,6 @@ type family ProofByTableaux p = p' | p' -> p
 
 tableaux :: PL.Proof (ProofByTableaux p)
 tableaux = error "proof by tableaux"
-
-tableaux' :: ProofByTableaux p
-tableaux' = error "proof by tableaux"
 
 evMagic :: Ct -> Maybe EvTerm
 evMagic ct = case classifyPredType $ ctEvPred $ ctEvidence ct of

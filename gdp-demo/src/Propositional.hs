@@ -12,13 +12,14 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Propositional
-  ( -- * The `Proof` monad
+  ( -- * The `Proof` type
     Proof
-  , (|.), (|$), (|/), (|\), ($$)
-  , given, axiom
+  , (|.), (|$), (|/), (|\)
+  , axiom
+  , sorry
   
   -- * Refinement types
-  , type (:::), (...)
+  , type (:::), (...), type (?), assert
   -- * First-order Logic
 
   -- ** Logical symbols
@@ -110,9 +111,7 @@ import Control.Monad ((>=>))
 
 > and2or :: (p && q) -> Proof (p || q)
 >
-> and2or pq = do
->    p <- and_elimL pq    -- or: "p <- fst <$> and_elim pq"
->    or_introL p
+> and2or pq = and_elimL pq |$ or_introL
 
     If the body of the proof does not match the proposition
     you claim to be proving, the compiler will raise a type
@@ -121,9 +120,7 @@ import Control.Monad ((>=>))
 
 > and2or :: (p && q) -> Proof (p || q)
 >
-> and2or pq = do
->    p <- and_elimL pq
->    or_introR p
+> and2or pq = and_elimL pq |$ or_introR
 
 resulting in the error
 
@@ -131,11 +128,11 @@ resulting in the error
     • Couldn't match type ‘p’ with ‘q’
       ‘p’ is a rigid type variable bound by
         the type signature for:
-          and2or :: forall p q. (p && q) -> Proof (p || q)
+          and2or :: forall p q. Proof (p && q) -> Proof (p || q)
 
       ‘q’ is a rigid type variable bound by
         the type signature for:
-          and2or :: forall p q. (p && q) -> Proof (p || q)
+          and2or :: forall p q. PRoof (p && q) -> Proof (p || q)
 
       Expected type: Proof (p || q)
         Actual type: Proof (p || p)
@@ -143,17 +140,7 @@ resulting in the error
 -}
 data Proof (pf :: *) = QED
 
-instance Functor Proof where
-  fmap _ = const QED -- modus ponens (external?)
-
-instance Applicative Proof where
-  pure = const QED -- axiom
-  pf1 <*> pf2 = QED -- modus ponens (internal?)
-
-instance Monad Proof where
-  pf >>= f = QED
-
-{-| This operator is just a specialization of @(>>=)@, but
+{-| This operator is just a specialization of @flip ($)@, but
     can be used to create nicely delineated chains of
     derivations within a larger proof. The first statement
     in the chain should produce a formula; @(|$)@ then
@@ -165,8 +152,8 @@ instance Monad Proof where
 >           |$ or_introL
 -}
 
-(|$) :: Proof p -> (p -> Proof q) -> Proof q
-(|$) = (>>=)
+(|$) :: a -> (a -> b) -> b
+(|$) = flip ($)
 
 infixr 7 |$
 
@@ -185,8 +172,8 @@ infixr 7 |$
 >        |. or_introL
 -}
 
-(|.) :: (p -> Proof q) -> (q -> Proof r) -> p -> Proof r
-(|.) = (>=>)
+(|.) :: (a -> b) -> (b -> c) -> (a -> c)
+(|.) = flip (.)
 
 infixr 9 |.
 
@@ -202,7 +189,7 @@ my_proof :: r && (p || (q && (q --> p))) -> Proof p
 
 my_proof =
   do  and_elimR          -- Forget the irrelevant r.
-   |. or_elimL given     -- The first case of the || is immediate;
+   |. or_elimL id        -- The first case of the || is immediate;
    |/ and_elim           -- The rest of the proof handles the second case,
    |. uncurry impl_elim  --   by unpacking the && and feeding the q into
                          --   the implication (q --> p).
@@ -211,16 +198,15 @@ my_proof =
     The rising @/@ is meant to suggest the bottom half of the proof getting
     plugged in to the Or-elimination line.
 -}
-(|/) :: (p -> (q -> Proof r) -> Proof r) -> (q -> Proof r) -> p -> Proof r
+(|/) :: (a -> (b -> c) -> c) -> (b -> c) -> (a -> c)
 (|/) = flip
 infixr 9 |/
 
-my_proof' :: r && (p || (q && (q --> p))) -> Proof p
+my_proof' :: Proof (r && (p || (q && (q --> p)))) -> Proof p
 
-my_proof' = do  and_elimR
-             |. or_elimL given
-             |/ and_elim
-             |. uncurry impl_elim
+my_proof' =  and_elimR
+          |. or_elimL id
+          |/ (uncurry impl_elim . and_elim)
 
 {-| The @(|\\)@ operator is used to take the subproof so far and feed it
     into a rule that is expecting a subproof as a premise.
@@ -234,7 +220,7 @@ my_proof' = do  and_elimR
 my_proof :: (p --> q) -> (Not p --> r) -> Not q -> Proof r
 
 my_proof impl1 impl2 q' =
-  do  modus_ponens impl1   -- This line, composed with the next,
+      modus_ponens impl1   -- This line, composed with the next,
    |. contradicts' q'      --   form a proof of FALSE from p.
    |\\ not_intro            -- Closing the subproof above, conclude not-p.
    |. modus_ponens impl2   -- Now apply the second implication to conclude r.
@@ -243,29 +229,17 @@ my_proof impl1 impl2 q' =
     The falling @\\@ is meant to suggest the upper half of the proof
     being closed off by the Not-introduction line.
 -}
-(|\) :: (p -> Proof q) -> ((p -> Proof q) -> Proof r) -> Proof r
+(|\) :: (a -> b) -> ((a -> b) -> c) -> c
 (|\) = flip ($)
 infixl 8 |\
 
--- | Take a proof of @p@ and feed it in as the first premise of
---   an argument that expects a @p@ and a @q@.
-($$) :: (p -> q -> Proof r) -> Proof p -> (q -> Proof r)
-(f $$ pp) q = do { p <- pp; f p q }
-  
-my_proof :: (p --> q) -> (Not p --> r) -> Not q -> Proof r
+my_proof :: Proof (p --> q) -> Proof (Not p --> r) -> Proof (Not q) -> Proof r
 
 my_proof impl1 impl2 q' =
-  do modus_ponens impl1    -- This line, composed with the next,
-  |. contradicts' q'       --   form a proof of FALSE from p.
-  |\ not_intro             -- Closing the subproof above, conclude not-p.
-  |. modus_ponens impl2
-
--- | @given@ creates a proof of P, given P as
---   an assumption.
---
---   @given@ is just a specialization of @pure@ / @return@.
-given :: p -> Proof p
-given _ = QED
+     modus_ponens impl1    -- This line, composed with the next,           Pf p -> Pf q
+  |. contradicts' q'       --   form a proof of FALSE from p.              Pf p -> Pf FALSE
+  |\ not_intro             -- Closing the subproof above, conclude not-p.  (Pf p -> Pf FALSE) -> Pf !p
+  |. modus_ponens impl2                                               --   Pf !p -> Pf r
 
 -- | @axiom@ can be used to provide a "proof" of
 --   any proposition, by simply assering it as
@@ -276,6 +250,17 @@ given _ = QED
 -- _Completed proofs should never use @axiom@!_
 axiom :: Proof p
 axiom = QED
+
+-- | @axiom@ can be used to provide a "proof" of
+--   any proposition, by simply assering it as
+--   true. This is useful for stubbing out portions
+--   of a proof as you work on it, but subverts
+--   the entire proof system.
+--
+-- _Completed proofs should never use @axiom@!_
+{-# WARNING sorry "`sorry` remains in program." #-}
+sorry :: Proof p
+sorry = QED
 
 newtype TRUE  = TRUE Defn
 newtype FALSE = FALSE Defn
@@ -322,6 +307,18 @@ infixr 1 :::
 instance The (a ~~ n ::: p) a where
   the (SuchThat x) = the x
 
+newtype a ? (p :: * -> *) = Satisfies a
+infixr 1 ?
+
+instance The (a ? p) a
+
+-- | Re-introduce a name for a refined value.
+rename :: (a ? p) -> (forall name. (a ~~ name ::: p name) -> t) -> t
+rename x k = name (the x) (\x -> k (x ...axiom))
+
+assert :: Defining (p ()) => a -> (a ? p)
+assert = coerce
+
 (...) :: a -> Proof p -> (a ::: p)
 x ...proof = coerce x
 
@@ -342,45 +339,45 @@ noncontra = QED
 --------------------------------------------------}
 
 -- | Prove "P and Q" from P and Q.
-and_intro :: p -> q -> Proof (p && q)
+and_intro :: Proof p -> Proof q -> Proof (p && q)
 and_intro _ _ = QED
 
 -- | Prove "P and Q" from Q and P.
-and_intro' :: q -> p -> Proof (p && q)
+and_intro' :: Proof q -> Proof p -> Proof (p && q)
 and_intro' _ _ = QED
 
 -- | Prove "P or Q" from  P.
-or_introL :: p -> Proof (p || q)
+or_introL :: Proof p -> Proof (p || q)
 or_introL _ = QED
 
 -- | Prove "P or Q" from Q.
-or_introR :: q -> Proof (p || q)
+or_introR :: Proof q -> Proof (p || q)
 or_introR _ = QED
 
 -- | Prove "P implies Q" by demonstrating that,
 --   from the assumption P, you can prove Q.
-impl_intro :: (p -> Proof q) -> Proof (p --> q)
+impl_intro :: (Proof p -> Proof q) -> Proof (p --> q)
 impl_intro _ = QED
 
 -- | Prove "not P" by demonstrating that,
 --   from the assumption P, you can derive a false conclusion.
-not_intro :: (p -> Proof FALSE) -> Proof (Not p)
+not_intro :: (Proof p -> Proof FALSE) -> Proof (Not p)
 not_intro _ = QED
 
 -- | `contrapositive` is an alias for `not_intro`, with
 --   a somewhat more suggestive name. Not-introduction
 --   corresponds to the proof technique "proof by contrapositive".
-contrapositive :: (p -> Proof FALSE) -> Proof (Not p)
+contrapositive :: (Proof p -> Proof FALSE) -> Proof (Not p)
 contrapositive = not_intro
 
 -- | Prove a contradiction from "P" and "not P".
-contradicts :: p -> Not p -> Proof FALSE
+contradicts :: Proof p -> Proof (Not p) -> Proof FALSE
 contradicts _ _ = QED
 
 -- | `contradicts'` is `contradicts` with the arguments
 --   flipped. It is useful when you want to partially
 --   apply `contradicts` to a negation.
-contradicts' :: Not p -> p -> Proof FALSE
+contradicts' :: Proof (Not p) -> Proof p -> Proof FALSE
 contradicts' = flip contradicts
 
 -- | Prove "For all x, P(x)" from a proof of P(*c*) with
@@ -390,7 +387,7 @@ univ_intro _ = QED
 
 -- | Prove "There exists an x such that P(x)" from a specific
 --   instance of P(c).
-ex_intro :: p c -> Proof (Exists x (p x))
+ex_intro :: Proof (p c) -> Proof (Exists x (p x))
 ex_intro _ = QED
 
 {--------------------------------------------------
@@ -398,43 +395,43 @@ ex_intro _ = QED
 --------------------------------------------------}
 
 -- | From the assumption "P and Q", produce a proof of P.
-and_elimL :: p && q -> Proof p
-and_elimL _ = QED
+and_elimL :: Proof (p && q) -> Proof p
+and_elimL = fst . and_elim
 
 -- | From the assumption "P and Q", produce a proof of Q.
-and_elimR :: p && q -> Proof q
-and_elimR _ = QED
+and_elimR :: Proof (p && q) -> Proof q
+and_elimR = snd . and_elim
 
 -- | From the assumption "P and Q", produce both a proof
 --   of P, and a proof of Q.
-and_elim :: p && q -> Proof (p, q)
-and_elim c = (,) <$> and_elimL c <*> and_elimR c
+and_elim :: Proof (p && q) -> (Proof p, Proof q)
+and_elim _ = (QED, QED)
   
 {-| If you have a proof of R from P, and a proof of
      R from Q, then convert "P or Q" into a proof of R.
 -}
-or_elim :: (p -> Proof r) -> (q -> Proof r) -> (p || q) -> Proof r
+or_elim :: (Proof p -> Proof r) -> (Proof q -> Proof r) -> Proof (p || q) -> Proof r
 or_elim _ _ _ = QED
 
 {-| Eliminate the first alternative in a conjunction.
 -}
-or_elimL :: (p -> Proof r) -> (p || q) -> (q -> Proof r) -> Proof r
+or_elimL :: (Proof p -> Proof r) -> Proof (p || q) -> (Proof q -> Proof r) -> Proof r
 or_elimL case1 disj case2 = or_elim case1 case2 disj
 
 {-| Eliminate the second alternative in a conjunction.
 -}
-or_elimR :: (q -> Proof r) -> (p || q) -> (p -> Proof r) -> Proof r
+or_elimR :: (Proof q -> Proof r) -> Proof (p || q) -> (Proof p -> Proof r) -> Proof r
 or_elimR case2 disj case1 = or_elim case1 case2 disj
 
 -- | Given "P imples Q" and P, produce a proof of Q.
 --   (modus ponens)
-impl_elim :: p -> (p --> q) -> Proof q
+impl_elim :: Proof p -> Proof (p --> q) -> Proof q
 impl_elim _ _ = QED
 
 -- | @modus_ponens@ is just @impl_elim@ with the arguments
 --   flipped. In this form, it is useful for partially
 --   applying an implication.
-modus_ponens :: (p --> q) -> p -> Proof q
+modus_ponens :: Proof (p --> q) -> Proof p -> Proof q
 modus_ponens = flip impl_elim
 
 {-| Modus tollens lets you prove "Not P" from
@@ -467,25 +464,25 @@ modus_tollens impl q' =
 @
 -}
 
-modus_tollens :: (p --> q) -> Not q -> Proof (Not p)
+modus_tollens :: Proof (p --> q) -> Proof (Not q) -> Proof (Not p)
 modus_tollens impl q' =
   do  modus_ponens impl
    |. contradicts' q'
    |\ not_intro
 
 -- | From a falsity, prove anything.
-absurd :: FALSE -> Proof p
+absurd :: Proof FALSE -> Proof p
 absurd _ = QED
 
 -- | Given "For all x, P(x)" and any c, prove the proposition
 --   "P(c)".
-univ_elim :: ForAll x (p x) -> Proof (p c)
+univ_elim :: Proof (ForAll x (p x)) -> Proof (p c)
 univ_elim _ = QED
 
 -- | Given a proof of Q from P(c) with c generic, and the
 --   statement "There exists an x such that P(x)", produce
 --   a proof of Q.
-ex_elim :: (forall c. p c -> Proof q) -> Exists x (p x) -> Proof q
+ex_elim :: (forall c. Proof (p c) -> Proof q) -> Proof (Exists x (p x)) -> Proof q
 ex_elim _ _ = QED
 
 
@@ -529,15 +526,15 @@ from which the desired conclusion is derived.
 @
 contradiction impl =
   do  lem             -- introduce p || Not p
-   |$ or_elimL given  -- dispatch the first, straightforward case
+   |$ or_elimL id     -- dispatch the first, straightforward case
    |/ impl            -- Now we're on the second case. Apply the implication..
    |. absurd          -- .. and, from falsity, conclude p.
 @
 -}
-contradiction :: forall p. Classical => (Not p -> Proof FALSE) -> Proof p
+contradiction :: forall p. Classical => (Proof (Not p) -> Proof FALSE) -> Proof p
 contradiction impl =
   do  lem
-   |$ or_elimL given
+   |$ or_elimL id
    |/ impl
    |. absurd
   
@@ -551,7 +548,7 @@ not_not_elim p'' = contradiction (contradicts' p'')
 @
 -}
 
-not_not_elim :: Classical => Not (Not p) -> Proof p
+not_not_elim :: Classical => Proof (Not (Not p)) -> Proof p
 not_not_elim p'' = contradiction (contradicts' p'')
 
 {--------------------------------------------------------
@@ -628,11 +625,11 @@ instance Transitive CanReach
 @
 -}   
 class Transitive c where
-  transitive :: c p q -> c q r -> Proof (c p r)
-  default transitive :: Defining (c p q) => c p q -> c q r -> Proof (c p r)
+  transitive :: Proof (c p q) -> Proof (c q r) -> Proof (c p r)
+  default transitive :: Defining (c p q) => Proof (c p q) -> Proof (c q r) -> Proof (c p r)
   transitive _ _ = QED
 
-transitive' :: Transitive c => c q r -> c p q -> Proof (c p r)
+transitive' :: Transitive c => Proof (c q r) -> Proof (c p q) -> Proof (c p r)
 transitive' = flip transitive
 
 class Idempotent c where
@@ -646,22 +643,12 @@ class Commutative c where
   default commutative :: Defining (c p q) => Proof (c p q == c q p)
   commutative = QED
   
-  commute :: c p q -> c q p
-  default commute :: (Defining (c p q), Defining (c q p)) => c p q -> c q p
-  commute = by_defn
-
 class Associative c where
 
   associative :: Proof (c p (c q r) == c (c p q) r)
   default associative :: Defining (c p q) => Proof (c p (c q r) == c (c p q) r)
   associative = QED
   
-  assocL :: c p (c q r) -> c (c p q) r
-  default assocL :: (Defining (c p (c q r)), Defining (c (c p q) r)) => c p (c q r) -> c (c p q) r
-  assocL = by_defn
-  assocR :: c (c p q) r -> c p (c q r)
-  default assocR :: (Defining (c (c p q) r), Defining (c p (c q r)))  => c (c p q) r -> c p (c q r)
-  assocR = by_defn
 
 class Distributive c c' where
 
@@ -670,9 +657,9 @@ class Distributive c c' where
   distributive = QED
 
 class Injective c where
-  elim_inj :: (c (f x) == c (f y)) -> Proof (c x == c y)
+  elim_inj :: Proof (c (f x) == c (f y)) -> Proof (c x == c y)
   default elim_inj :: (Defining (c (f x)), Defining (c (f y)), Defining (c x), Defining (c y))
-   => (c (f x) == c (f y)) -> Proof (c x == c y)
+   => Proof (c (f x) == c (f y)) -> Proof (c x == c y)
   elim_inj _ = QED
 
 {--------------------------------------------------
@@ -731,23 +718,23 @@ same x y = if the x == the y
 -- | Given a function and an equality over ones of its arguments,
 --   replace the left-hand side of the equality with the right-hand side.
 substitute :: (Argument f n, GetArg f n ~ x)
-    => Arg n -> (x == x') -> f -> Proof (SetArg f n x')
-substitute _ _ _ = QED
+    => Arg n -> Proof (x == x') -> Proof (f == SetArg f n x')
+substitute _ _ = QED
 
 -- | Substitute @x'@ for @x@ under the function @f@, on the left-hand side
 --   of an equality.
 substituteL :: (Argument f n, GetArg f n ~ x)
-    => Arg n -> (x == x') -> (f == g) -> Proof (SetArg f n x' == g)
+    => Arg n -> Proof (x == x') -> Proof (f == g) -> Proof (SetArg f n x' == g)
 substituteL _ _ _ = QED
 
 -- | Substitute @x'@ for @x@ under the function @f@, on the right-hand side
 --   of an equality.
 substituteR :: (Argument f n, GetArg f n ~ x)
-    => Arg n -> (x == x') -> (g == f) -> Proof (g == SetArg f n x')
+    => Arg n -> Proof (x == x') -> Proof (g == f) -> Proof (g == SetArg f n x')
 substituteR _ _ _ = QED
 
 -- | Apply a function to both sides of an equality.
 apply :: forall f n x x'. (Argument f n, GetArg f n ~ x)
-    => Arg n -> (x == x') -> Proof (f == SetArg f n x')
+    => Arg n -> Proof (x == x') -> Proof (f == SetArg f n x')
 apply _ _ = QED
   

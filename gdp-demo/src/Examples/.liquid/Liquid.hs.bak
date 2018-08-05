@@ -1,0 +1,83 @@
+{- "Ghosts on the outside, Liquid Haskell on the inside"
+
+This file shows how to export an interface using GDP, but have
+the module's internals checked by LiquidHaskell. To check the
+internals, follow these steps:
+
+  1) Install an SMT solver, such as Z3, CVC4, or MathSAT.
+
+  2) Un-comment the extra-deps in stack.yaml to add the dependencies
+     for LiquidHaskell.
+
+  3) From the gdp-demo directory run
+
+        stack install liquidhaskell
+
+  4) Change to the src directory, then check this file by running
+
+        liquid Examples/Liquid.hs
+
+-}
+
+{-# LANGUAGE TypeOperators #-}
+
+module Examples.Liquid where
+
+import           Named
+import           Propositional
+import           The
+
+{-@ type Even = {v:Int | v mod 2 = 0} @-}
+type Even = Int ? IsEven -- (a ? p) is equivalent to (a ~~ name ::: p name)
+
+newtype IsEven n = Even Defn
+newtype IsNonNegative n = IsNonNegative Defn
+
+type Nat = Int ? IsNonNegative
+
+{-@ weAreEven_LH :: [Even] @-}
+weAreEven_LH = [(0-10), (0-4), 0, 2, 666]
+weAreEven :: [Even]
+weAreEven = map assert weAreEven_LH
+
+{-@ notEven_LH :: Even @-}
+notEven_LH = 7
+notEven :: Even
+notEven = assert notEven_LH
+
+{-@ isEven_LH :: n:Nat -> {v:Bool | (v <=> (n mod 2 == 0))} @-}
+isEven_LH   :: Int -> Bool
+isEven_LH 0 = True
+isEven_LH 1 = False
+isEven_LH n = not (isEven_LH (n-1))
+
+{-@ evens_LH :: n:Nat -> [Even] @-}
+evens_LH n = [i | i <- range_LH 0 n, isEven_LH i]
+evens n = map assert (evens_LH n)
+evens :: Int -> [Even]
+
+{-@ range_LH :: lo:Int -> hi:Int -> [{v:Int | (lo <= v && v < hi)}] / [hi -lo] @-}
+range_LH :: Int -> Int -> [Int]
+range_LH lo hi
+  | lo < hi   = lo : range_LH (lo+1) hi
+  | otherwise = []
+
+{-@ shift_LH :: [Even] -> Even -> [Even] @-}
+shift_LH xs k = [x + k | x <- xs]
+shift :: [Even] -> Even -> [Even]
+shift xs k = map assert (shift_LH (map the xs) (the k))
+
+{-@ double_LH :: [Nat] -> [Even] @-}
+double_LH xs = [x + x | x <- xs]
+double :: [Int] -> [Even]
+double = map assert . double_LH
+
+
+
+---
+
+notEven_LH    :: Int
+weAreEven_LH  :: [Int]
+shift_LH      :: [Int] -> Int -> [Int]
+double_LH     :: [Int] -> [Int]
+
