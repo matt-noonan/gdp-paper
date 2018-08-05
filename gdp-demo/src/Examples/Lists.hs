@@ -22,35 +22,34 @@ import           The
 import           Data.Constraint
 import           Data.Reflection
 
-newtype IsCons xs = IsCons_ Defn
-newtype IsNil  xs = IsNil_  Defn
+----------------------------------------------------
+-- Basic predicates about lists
+----------------------------------------------------
 
-data ListCases xs
-  = IsCons (Proof (IsCons xs))
-  | IsNil  (Proof (IsNil xs))
+data IsCons xs
+data IsNil  xs
 
 newtype Head xs = Head Defn
 newtype Tail xs = Tail Defn
 
-classifyList :: forall xs a. ([a] ~~ xs)
-            -> Either (a ~~ Head xs, [a] ~~ Tail xs, Dict (Fact (IsCons xs)))
-                      (Dict (Fact (IsNil  xs)))
-classifyList (The xs) = case xs of
-  (h:t) -> Left  (defn h, defn t, give (axiom @(IsCons xs)) Dict)
-  []    -> Right (give (axiom @(IsNil xs)) Dict)
-
-pattern Cons :: () => Fact (IsCons xs) => (a ~~ Head xs) -> ([a] ~~ Tail xs) -> ([a] ~~ xs)
-pattern Cons h t <- (classifyList -> Left (h, t, Dict))
-
-pattern Nil :: () => Fact (IsNil xs) => ([a] ~~ xs)
-pattern Nil  <- (classifyList -> Right Dict)
-
------
+{-
+data ListCases xs
+  = IsCons (Proof (IsCons xs))
+  | IsNil  (Proof (IsNil xs))
 
 classify :: ([a] ~~ xs) -> ListCases xs
 classify xs = case the xs of
   (_:_) -> IsCons axiom
   []    -> IsNil  axiom
+-}
+
+pattern IsCons :: Proof (IsCons xs) -> ([a] ~~ xs)
+pattern IsCons proof <- ((\xs -> (the xs, axiom)) -> ((_:_), proof))
+
+pattern IsNil :: Proof (IsNil xs) -> ([a] ~~ xs)
+pattern IsNil proof <- ((\xs -> (the xs, axiom)) -> ([], proof))
+
+---------------------------------------------------
 
 newtype Reverse xs = Reverse Defn
 
@@ -67,23 +66,33 @@ endpts :: IO (Int, Int)
 endpts = do
   putStrLn "Enter a non-empty list of integers:"
   xs <- readLn :: IO [Int]
-  name xs $ \xs -> case classify xs of
-    IsCons isCons -> let ok = rev_cons isCons in
-      return (head $ xs ...isCons, head (reverse xs ...ok))
-    IsNil evidence  -> endpts
+  name xs $ \xs -> case xs of
+    IsCons proof ->
+      return (head (xs ...proof), head (reverse xs ...rev_cons proof))
+    IsNil proof  -> endpts
 
 --------------------------------------------------------------
 -- An alternate approach: passing the proof implicitly,
 -- using Data.Reflection.
 
+-- First, we define patterns that bring the IsCons or IsNil proofs into
+-- scope during pattern matching:
+classifyList :: forall xs a. ([a] ~~ xs)
+            -> Either (a ~~ Head xs, [a] ~~ Tail xs, Dict (Fact (IsCons xs)))
+                      (Dict (Fact (IsNil  xs)))
+classifyList (The xs) = case xs of
+  (h:t) -> Left  (defn h, defn t, give (axiom @(IsCons xs)) Dict)
+  []    -> Right (give (axiom @(IsNil xs)) Dict)
+
+pattern Cons :: () => Fact (IsCons xs) => (a ~~ Head xs) -> ([a] ~~ Tail xs) -> ([a] ~~ xs)
+pattern Cons h t <- (classifyList -> Left (h, t, Dict))
+
+pattern Nil :: () => Fact (IsNil xs) => ([a] ~~ xs)
+pattern Nil  <- (classifyList -> Right Dict)
+
+-----
 head' :: Fact (IsCons xs) => ([a] ~~ xs) -> a
 head' (The xs) = Prelude.head xs
-
-reverse :: ([a] ~~ xs) -> ([a] ~~ Reverse xs)
-reverse (The xs) = defn (Prelude.reverse xs)
-
-rev_cons :: Proof (IsCons xs) -> Proof (IsCons (Reverse xs))
-rev_cons _ = axiom
 
 endpts' :: IO (Int, Int)
 endpts' = do

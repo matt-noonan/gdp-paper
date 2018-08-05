@@ -1,4 +1,4 @@
-\documentclass[format=sigplan, review=false, screen=true]{acmart}
+\documentclass[format=sigplan, review=false, screen=true, 10pt]{acmart}
 \usepackage[T1]{fontenc}
 %\usepackage[utf8]{inputenc}
 \usepackage{fontspec}
@@ -121,32 +121,19 @@
 
 \usepackage{cleveref}
 
-% Metadata Information
-\acmJournal{TWEB}
-\acmVolume{9}
-\acmNumber{4}
-\acmArticle{39}
-\acmYear{2018}
-\acmMonth{3}
-\copyrightyear{2018}
-%\acmArticleSeq{9}
 
-% Copyright
-%\setcopyright{acmcopyright}
+%%% The following is specific to Haskell '18 and the paper
+%%% 'Ghosts of Departed Proofs (Functional Pearl)'
+%%% by Matt Noonan.
+%%%
 \setcopyright{acmlicensed}
-%\setcopyright{rightsretained}
-%\setcopyright{usgov}
-%\setcopyright{usgovmixed}
-%\setcopyright{cagov}
-%\setcopyright{cagovmixed}
-
-% DOI
-\acmDOI{0000001.0000001}
-
-% Paper history
-\received{June 2018}
-%\received[revised]{March 2009}
-%\received[accepted]{June 2009}
+\acmPrice{15.00}
+\acmDOI{10.1145/3242744.3242755}
+\acmYear{2018}
+\copyrightyear{2018}
+\acmISBN{978-1-4503-5835-4/18/09}
+\acmConference[Haskell '18]{Proceedings of the 11th ACM SIGPLAN International Haskell Symposium}{September 27--28, 2018}{St. Louis, MO, USA}
+\acmBooktitle{Proceedings of the 11th ACM SIGPLAN International Haskell Symposium (Haskell '18), September 27--28, 2018, St. Louis, MO, USA}
 
 % Document starts
 \begin{document}
@@ -288,48 +275,47 @@ endpts = do
 -- the caller to pattern-match on the Maybe at every use,
 -- even when the list is known to be non-empty. Frustrated
 -- users cannot be blamed for using `fromJust`!
-head :: [a] -> Maybe a
-head xs = case xs of
+headMay :: [a] -> Maybe a
+headMay xs = case xs of
   (x:_) -> Just x
   []    -> Nothing
 
-endpts = do
+safeEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
-  case head xs of
-    Just x -> return (x, fromJust (head (reverse xs))
+  case headMay xs of
+    Just x -> return (x, fromJust (headMay (reverse xs))
     _      -> safeEndpts
 ----------------------------------------------------------
 -- "Ghosts of Departed Proofs". Safe. Does not return
 -- an optional value; preconditions are checked early
 -- and carried by "ghosts" (specialized phantom types).
 rev_cons :: Proof (IsCons xs) -> Proof (IsCons (Rev xs))
-reverse  :: ([a] ~~ xs) -> ([a] ~~ Rev xs)
+gdpReverse :: ([a] ~~ xs) -> ([a] ~~ Rev xs)
 
-head :: Fact (IsCons xs) => ([a] ~~ xs) -> a
-head xs = Prelude.head (the xs) -- safe!
+gdpHead :: ([a] ~~ xs ::: IsCons xs) -> a
+gdpHead xs = head (the xs) -- safe!
 
-endpts = do
+gdpEndpts = do
   putStrLn "Enter a non-empty list of integers:"  
   xs <- readLn
-  name xs $ \xs -> case xs of
-    Cons _ _ -> noting (rev_cons `on` xs) $
-      return (head xs, head (reverse xs))
-    Nil      -> endpts
+  name xs $ \xs -> case classify xs of
+    IsCons proof ->
+      return (gdpHead $ xs            ...proof,
+              gdpHead $ gdpReverse xs ...rev_cons proof)
+    IsNil proof  -> gdpEndpts
 \end{filecontents*}
 
 \begin{figure}
   \inputminted{haskell}{idioms.hs}
   \caption{Idioms for implementing the
     \texttt{head} function, along with usage examples.
-    The \texttt{gdpHead} function can only be invoked in
-    a context where the user has already proven that the
-    list is non-empty, combining the simplicity of the
+    The \texttt{gdpHead} function can only be invoked by
+    presenting a proof that the list is non-empty, combining the simplicity of the
     first example with the safety of the second. \texttt{rev\_cons}
     is a proof combinator exported by the library to help the
     user prove that the reverse of a non-empty list is also non-empty. See
-    \cref{full-gdp} for details. \pdfcomment{Add a local reference to this figure.}
-    \label{idioms-fig}}
+    \cref{full-gdp} for details.\label{idioms-fig}}
 \end{figure}
 
 \subsection{Common idioms for handling pre-conditions}
@@ -344,8 +330,8 @@ a variety of strategies used in the wild.
 
 \paragraph{Run-time failure on bad inputs.}
 The simplest approach is
-  to have a function just fail on malformed inputs. The failure mode can
-  be an immediate run-time error (as in Haskell's \texttt{head}), or result in
+to have a function just fail on malformed inputs. The failure mode can
+  be an immediate run-time error (as in \texttt{head} from \Cref{idioms-fig}), or
   undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
   
 \paragraph{Returning a dummy value.}
@@ -358,13 +344,14 @@ The simplest approach is
   ``\texttt{nil} is the first element of this list''.
 
 \paragraph{Returning a value with an option type.}
-  A similar ``dummy value'' strategy
+  A related strategy
   for languages with stricter typing discipline is to use an ``option type,'' such
   as Haskell's \texttt{Maybe} or Scala's \texttt{Option}. A value of type \texttt{Maybe T}
   cannot be used where a value of type \texttt{T} was expected, so the user must
   explicitly pattern match on the optional value to extract the result and handle the
   error case. This approach may lead to frustration when the user believes that the
-  error case is not possible.
+  error case is not possible, as in the application \texttt{headMay} to the reverse of
+  a non-empty list in \Cref{idioms-fig}.
   
 \paragraph{Modifying input types to exclude bad inputs.}
 Finally, the API designer may select more restrictive types for the inputs in order
@@ -409,8 +396,8 @@ the software is left in a brittle state.
 For example, a recent snapshot of \texttt{hackage}
 reveals over 2000 instances where the partial function
 \texttt{fromJust} is applied to the
-result of \texttt{Data.Map}'s \texttt{lookup}. Each one
-of these instances\pdfcomment{Weaken?} is a vignette of a programmer
+result of \texttt{Data.Map}'s \texttt{lookup}. Any one
+of these instances may be a vignette of a programmer
 falling into a pit of despair:
 they had a mental proof that a certain key must be
 present in the map, but possessed no mechanism for
@@ -1064,7 +1051,7 @@ rank-2 functions.
 
 \begin{filecontents*}{pred.hs}
 -- Type exported, constructor hidden (but see `axiom`)
-data Proof p = QED deriving (Functor, Applicative, Monad)
+data Proof p = QED
 
 -- Attaching predicates to values
 newtype a ::: p = SuchThat a
@@ -1211,7 +1198,7 @@ dot_rev xs = name xs $ \vec ->
       \texttt{vec} and \texttt{reverse vec} have the same length.\label{dot-product}}
 \end{figure}
 
-\subsection{An EDSL for ghostly proofs}
+\subsection{Logical combinators for ghostly proofs}
 
 \begin{filecontents*}{tableaux.hs}
 type Theorem p q = (p --> q) --> (Not q --> Not p)
@@ -1250,8 +1237,7 @@ produce terms of type \texttt{Proof p}.
 Once we have constructed a proof of type \texttt{Proof p}, we can use the \texttt{(...)} combinator to attach that proof to a value of type \texttt{a}, producing a value of type \verb|(a ::: p)|. Note that \texttt{p} will often be a proof \emph{about} the wrapped value,
 but that is not required! Any value can carry any proof; the only thing that links value to proof is the use of a common name.
 
-\textcolor{red}{The monad instance for \texttt{Proof} turns out to be very useful, enabling proofs to be written in
-\texttt{do}-notation.} This embedded domain-specific language (EDSL) can be seen in action
+The proof combinators of \Cref{predicate-logic} can be seen in action
 in \texttt{proof1} of \Cref{tableaux-example} and, at a smaller scale, in the
 definition of \texttt{ok} in \Cref{idioms-fig}. Another application appears in \Cref{dot-product}, where the user defines a dot product function that only can be applied to same-sized lists.
 The user then supplies evidence to convince the compiler that the dot product of a list with its reverse is legal.
@@ -1314,18 +1300,25 @@ Luckily, it is simple to factor out axioms and deduction rules for specific theo
 from the libraries that make use of them. For example, we could publish a small
 library containing basic predicates and deduction rules about sets, such as:
 \begin{minted}[frame=none]{haskell}
-newtype x #$\in$# xs  = Element   Defn
-newtype xs #$\subseteq$# ys = Subset    Defn
-newtype xs #$\cap$# ys = Intersect Defn
-
--- All implementation bodies are `axiom`
-subset_elts      :: (a #$\subseteq$# b) -> (x #$\in$# a) -> Proof (x #$\in$# b)
-intersect_subset :: Proof ((a #$\cap$# b) #$\subseteq$# a)
-intersect_sym    :: Proof (a #$\cap$# b == b #$\cap$# a)
+newtype xs #$\subseteq$# ys = Subset Defn
+subset_transitive ::
+  Proof (a #$\subseteq$# b) -> Proof (b #$\subseteq$# c) -> Proof (a #$\subseteq$# c)
+subset_transitive _ _ = axiom
 \end{minted}
 This same theory library could be used to reason about shared \texttt{St}
 regions and about key sets for maps, already achieving code reuse within
 the narrow confines of this paper's examples.
+
+An extra level of confidence
+can be obtained by splitting the theory library
+into \texttt{Assumed} and \texttt{Derived} submodules.\footnote{We only have ``confidence''---not ``surety''---because, after all, Haskell's type system \emph{is} inconsistent as a logic. That does not render it useless for
+  the evidence-pushing we need for GDP, however!}
+ A small, core set of
+ axioms are placed in the \texttt{Assumed} module and carefully audited for correctness.
+ A larger set of lemmas, derived from these axioms using GDP
+proof combinators, resides in the \texttt{Derived} submodule. This separation
+allows the library author to build up a large collection of lemmas from a
+small---and hopefully easy-to-verify---set of basic axioms.
 
 \subsection{Ghosts on the outside, proofs on the inside}
 Factoring common lemmas into theory modules helps ensure that
@@ -1338,20 +1331,9 @@ the correct lemmas in the first place? There is always the ``think very hard
 about it'' approach, but we can do better. Formal verification tools like
 Liquid Haskell \cite{vazou2016liquid} or \texttt{hs-to-coq} \cite{spector2018total}
 can be applied by the author of the theory library to ensure that it presents a
-sound interface. Note that the tooling is only needed by the author of the library;
+sound interface. Note that the tooling is only required by the author of the library;
 the end-users of the theory library only need to use plain Haskell. A simple
 demonstration using Liquid Haskell can be found in this paper's repository \cite{this}.
-
-An extra level of confidence
-can be obtained by splitting the theory library
-into \texttt{Assumed} and \texttt{Derived} submodules.\footnote{We only have ``confidence''---not ``surety''---because, after all, Haskell's type system \emph{is} inconsistent as a logic. That does not render it useless for
-  the evidence-pushing we need for GDP, however!}
- A small, core set of
-axioms are placed in the \texttt{Assumed} module and possibly checked by
-external tools. A larger set of lemmas, derived from these axioms using GDP
-proof combinators, resides in the \texttt{Derived} submodule. This separation
-allows the library author to build up a large collection of lemmas from a
-small---and hopefully easy-to-verify---set of basic axioms.
 
 \subsection{Building custom proof tactics}\label{tactics}
 
@@ -1414,7 +1396,7 @@ instead of constructing a tedious proof by hand.
 \subsection{Using reflection to pass implicit proofs}
 
 \section{Related Work}
-Phantom types
+The use of phantom type parameters to **** is well-known
 
 Lightweight static capabilities \cite{kiselyov2006lightweight}
 
