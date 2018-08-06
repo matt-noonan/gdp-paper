@@ -19,7 +19,7 @@ module Propositional
   , sorry
   
   -- * Refinement types
-  , type (:::), (...), type (?), assert, by
+  , type (:::), (...), type (?), assert
   -- * First-order Logic
 
   -- ** Logical symbols
@@ -31,6 +31,7 @@ module Propositional
   , Not
   , ForAll
   , Exists
+  , type (==)
 
   -- ** Natural deduction
 
@@ -321,9 +322,6 @@ assert = coerce
 
 (...) :: a -> Proof p -> (a ::: p)
 x ...proof = coerce x
-
-by :: (a ::: p) -> (Proof p -> Proof q) -> (a ::: q)
-by x _ = coerce x
 
 {--------------------------------------------------
   Tautologies

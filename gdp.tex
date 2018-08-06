@@ -1,16 +1,17 @@
 \documentclass[format=sigplan, review=false, screen=true, 10pt]{acmart}
 \usepackage[T1]{fontenc}
-%\usepackage[utf8]{inputenc}
-\usepackage{fontspec}
-\setmonofont[
-  Contextuals={Alternate},
-  Scale=0.9
-]{Fira Code}
+\usepackage[utf8x]{inputenc}
+%\usepackage{fontspec}
+%\setmonofont[
+%  Contextuals={Alternate},
+%  Scale=0.9
+%]{Fira Code}
 \makeatletter
 \def\verbatim@nolig@list{}
 \makeatother
 \usepackage{microtype}
-\linespread{0.98}
+\linespread{0.97}
+\usepackage{balance}
 
 \usepackage[icon=Note, color={0.6 0.8 0.9}]{pdfcomment}
 
@@ -57,7 +58,7 @@
 \usepackage{minted}
 \usemintedstyle{friendly}
 \setminted{
-    frame=lines,
+    frame=none, %lines,
     framesep=2mm,
     baselinestretch=1.2,
     %bgcolor=lightgray,
@@ -138,7 +139,7 @@
 % Document starts
 \begin{document}
 % Title portion. Note the short title for running heads
-\title[Ghosts of Departed Proofs]{Functional Pearl: Ghosts of Departed Proofs}
+\title[Ghosts of Departed Proofs]{Ghosts of Departed Proofs (Functional Pearl)}
 
 \author{Matt Noonan}
 \orcid{1234-5678-9012-3456}
@@ -255,8 +256,8 @@ In this paper, we will take the perspective of a library author, writing in
 Haskell 2010 (plus a few battle-tested language extensions). As a library
 author, our goal will be to design \emph{safe} APIs that are also \emph{ergonomic}
 for the end user. ``Safe'' means that we want to prevent the user from causing a
-run-time error. ``Ergonomic'' means that we do not want the correct use of our
-API to put an undue burden on the user.
+run-time error. ``Ergonomic'' means that the correct use of our
+API must not place an undue burden on the user.
 
 \begin{filecontents*}{idioms.hs}
 -- Unsafe API using non-total functions.
@@ -301,8 +302,8 @@ gdpEndpts = do
   xs <- readLn
   name xs $ \xs -> case classify xs of
     IsCons proof ->
-      return (gdpHead $ xs            ...proof,
-              gdpHead $ gdpReverse xs ...rev_cons proof)
+      return (gdpHead (xs            ...proof),
+              gdpHead (gdpReverse xs ...rev_cons proof))
     IsNil proof  -> gdpEndpts
 \end{filecontents*}
 
@@ -331,8 +332,8 @@ a variety of strategies used in the wild.
 \paragraph{Run-time failure on bad inputs.}
 The simplest approach is
 to have a function just fail on malformed inputs. The failure mode can
-  be an immediate run-time error (as in \texttt{head} from \Cref{idioms-fig}), or
-  undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
+be an immediate run-time error (as in \texttt{head} from \Cref{idioms-fig}),
+an exception, or undefined behavior (as in \texttt{C++}'s \texttt{std::vector<T>::front()}).
   
 \paragraph{Returning a dummy value.}
   To avoid run-time errors, some APIs may have a ``dummy value''
@@ -350,7 +351,7 @@ to have a function just fail on malformed inputs. The failure mode can
   cannot be used where a value of type \texttt{T} was expected, so the user must
   explicitly pattern match on the optional value to extract the result and handle the
   error case. This approach may lead to frustration when the user believes that the
-  error case is not possible, as in the application \texttt{headMay} to the reverse of
+  error case is not possible, as when \texttt{headMay} is applied to the reverse of
   a non-empty list in \Cref{idioms-fig}.
   
 \paragraph{Modifying input types to exclude bad inputs.}
@@ -359,7 +360,7 @@ to make the function total. For example, some Haskell libraries make use of the
 \texttt{NonEmpty} type for lists that contain at least one element. The \texttt{head}
 function then becomes total. The user 
 can prove that their list is non-empty by making use of the smart constructor
-\texttt{nonEmpty :: [a] -> Maybe (NonEmpty a)}.\\
+\texttt{nonEmpty :: [a] -> Maybe (NonEmpty a)}.
 The drawbacks include duplication
 (do we re-implement \texttt{length} for \texttt{NonEmpty}?)
 and awkwardness when encoding preconditions that relate
@@ -374,7 +375,7 @@ will never cause a run-time error.
 But what about the \emph{users} of that library? Has the library author helped the user stay
 on a virtuous path, or have they led the user into temptation?
 
-In fact, the author of the library has merely pushed extra responsiblity onto the user.
+In fact, the author of the library has merely pushed extra responsibility onto the user.
 Every time the user applies a function that uses the optional-return idiom, they are obliged
 to test the return value and handle the error case. Even worse, the user is still asked
 to handle the error case when they have \emph{correctly} ensured that the function's
@@ -459,9 +460,9 @@ in \Cref{justified-api}).
 \subsection{The structure of this paper}
 In this paper, we will use a series of case studies to show how library authors can use
 ghosts of departed proofs (GDP) to create
-APIs that are both \emph{safe} and \emph{ergonomic}. \pdfcomment{Don't just re-define safe and ergonomic here}By \emph{safe}, we mean that the
-user cannot cause a run-time error or undefined behavior when using the API. Incorrect uses
-will become compile-time errors. By \emph{ergonomic}, we mean that the API is straightforward
+APIs that are both \emph{safe} and \emph{ergonomic}: the
+user cannot cause a run-time error when using the API, and incorrect uses
+of the API will become compile-time errors. But the APIs must be straightforward
 enough that the user is not tempted to subvert the library's safety guarantees by using
 unsafe functions. Crucially, we want the user to be able to \emph{communicate} their
 informal proofs to the library. If the user believes that a precondition has been met,
@@ -469,9 +470,23 @@ they should be able to explain \emph{why} to the library!
 
 The GDP design concept is relatively simple to implement. Each case study includes example library code,
 along with usage demonstrations. The examples in this paper are self-contained, and are bundled together in
-a project suitable for further experimentation \cite{this}. \pdfcomment{Figure 11 seems to be missing from the repo.}
+a project suitable for further experimentation \cite{this}. The proof combinators and other machinery
+from \Cref{full-gdp} are available as the \texttt{gdp} library on Hackage \cite{this-hackage}.
 
-
+\subsection{A very short tutorial on safe coercions}
+Several of the examples in this paper rely on a basic understanding of \emph{safe coercions}, a relatively recent addition to GHC Haskell \cite{Breitner:2014:SZC:2692915.2628141}. The details of safe coercions are a bit technical, but for the purposes of this paper it suffices to
+know the following operational facts:
+\begin{itemize}
+\item The types \texttt{T} and \texttt{newtype N = N T} have the same run-time representation.
+\item \texttt{coerce :: Coercible a b => a -> b} can be used as a zero-cost safe cast from \texttt{a}
+  to \texttt{b}, whenever the \texttt{Coercible a b} constraint is satisfied.
+\item If \texttt{N} is a \texttt{newtype} of \texttt{T}, then the constraints \texttt{Coercible N T}
+  and \texttt{Coercible T N} hold in any module where the constructor of \texttt{N} is visible.
+\end{itemize}
+We will make repeated use of this last property to help enforce encapsulation. Suppose a library author creates a module
+that defines \texttt{N} as a newtype of \texttt{T}, but \emph{does not} export the constructor. Then the
+library author can use \texttt{coerce} to freely cast between \texttt{T} and \texttt{N}, but \emph{users}
+of that library only see \texttt{N} as an opaque type, and are not able to coerce it to \texttt{T}.
 \section{Case Study \#1: Sorted lists}
 
 It is almost inevitable that a programmer will, at some point, be asked to work
@@ -524,7 +539,6 @@ But what if the user really \emph{does} have proof that the input lists have
 been sorted properly? Can we devise a mechanism that allows the user to communicate
 this proof to \texttt{mergeBy}?
 
-\subsection{Conjuring a name}
 
 \begin{filecontents*}{named.hs}
 module Named (Named, type (~~), name) where
@@ -551,7 +565,7 @@ name x k = k (coerce x)
     %to the library's users. \Cref{lemma-demo} provides a usage example for \texttt{defn}.
     \label{name-module}}
 \end{figure}
-
+\subsection{Conjuring a name}
 
 The first challenge is how to express the idea of two  comparators
 being ``the same''. In a language that supports equality tests on functions,
@@ -570,7 +584,7 @@ around \texttt{a}, with a phantom type parameter \texttt{n}. A simple module for
 can be found in \Cref{name-module}; the key feature is the exported \texttt{name}
 function that expresses the concept ``any value can be given a name''.
 
-Since Haskell does not directly support existentially-quantified types, we have to jump through
+To emulate an existentially-quantified type in Haskell, we will have to jump through
 a small hoop with \texttt{name}. Instead of directly returning a value with a name attached,
 \texttt{name} says to the user ``tell me what you wanted to do with that named value,
 and I'll do it for you''. This slight-of-hand is responsible for the rank-2
@@ -645,7 +659,9 @@ main = do
 \begin{figure}
   \vspace{1em}
   \inputminted{haskell}{usageO.hs}
-  \caption{Using the module developed in \Cref{sorted-module}.\label{sorted-module-demo}}
+  \caption{Using the module developed in \Cref{sorted-module}. For types with an \texttt{Ord}
+    instance, \texttt{comparing Down} produces a comparator for \texttt{(>)} that sorts in the
+    opposite of the usual order.\label{sorted-module-demo}}
   \end{figure}
 
 \subsection{Implementing a safe API for sorting and merging}
@@ -732,7 +748,7 @@ Now compare this to the analogous program, using \texttt{name} instead of \textt
 \begin{minted}[frame=none]{haskell}
 name compare $ \up ->
   name (comparing Down) $ \down ->
-    let list1 = sortBy up   [1,2,3]
+    let list1 = sortBy up   [1,2,3 :: Int]
         list2 = sortBy down [1,2,3]
     in the (mergeBy up list1 list2)
 \end{minted}
@@ -740,10 +756,10 @@ name compare $ \up ->
 Attempting to compile this program results in a type error:
 
 \begin{lstlisting}
-  • Couldn't match type "name1" with "name"
-        ...
-    Expected type: SortedBy name [Integer]
-      Actual type: SortedBy name1 [Integer]
+Couldn't match type "name1" with "name"
+      ...
+  Expected type: SortedBy name [Int]
+    Actual type: SortedBy name1 [Int]
 \end{lstlisting}
 \noindent
 What is the critical difference between these two examples? In the first, a user is
@@ -769,8 +785,8 @@ disambiguate our version from the existing type in \texttt{Control.Monad.ST}.
 
 In their safety analysis of the \texttt{ST} monad, Timany \textit{et al.} proposed to think of the \texttt{s} parameter as
 representing a name attached to a region of the heap \cite{timany2017logical}.
-Informally, we can think of \texttt{ST s} as representing a \texttt{State} monad over
-\emph{named regions}, like so:
+We can think of \texttt{ST s} as acting like some kind of informal \texttt{State} monad over
+\emph{named regions}, like in this Haskell-ish pseudocode:
 \begin{minted}[frame=none]{haskell}
 data Region = Region
 type St s a = State (Region ~~ s) a
@@ -807,7 +823,7 @@ use  :: (a #$\in$# (s #$\cap$# s')) -> (a #$\in$# s)
 symm :: (a #$\in$# (s #$\cap$# s')) -> (a #$\in$# (s' #$\cap$# s))
 \end{filecontents*}
 
-\begin{figure}
+\begin{figure}[t]
   \inputminted{haskell}{st1.hs}
   \caption{The standard ``state thread'' API. We write \texttt{a $\in$ s} to
     denote a reference cell of type \texttt{a} in the memory region named \texttt{s}.
@@ -816,7 +832,6 @@ symm :: (a #$\in$# (s #$\cap$# s')) -> (a #$\in$# (s' #$\cap$# s))
 \end{figure}
 
 \begin{figure}
-  \vspace{1.5em}
   \inputminted{haskell}{st2.hs}
   \caption{Extending the state thread API with shared references.\label{st-sharing-api}}
 \end{figure}
@@ -845,7 +860,7 @@ stSharingDemo = runSt2 $ do
 \end{filecontents*}
 
 \begin{figure}
-  \vspace{1.5em}
+  %\vspace{1.5em}
   \inputminted{haskell}{st.hs}
   \caption{An \texttt{ST}-style pure computation using local mutable
     references. 
@@ -878,8 +893,11 @@ In the process, we will vindicate  some of those
 2000 moments, forever enshrined on Hackage, where a programmer fell into
 the pit of despair and followed a map lookup by \texttt{fromJust}.
 
-\Cref{justified-api} gives a small, GDP-style API based on the \texttt{justified-containers}
-package. The key features are:
+\Cref{justified-api} gives a small, GDP-style API based on the author's
+\texttt{justified-containers}
+package\footnote{In fact, the GDP technique was developed in order to generalize the
+  design of \texttt{justified-containers} to other domains, and to add flexibility
+  for the end-user by providing a wider selection proof combinators.}. The key features are:
 \begin{itemize}
 \item A predicate \texttt{Key ks}, meaning ``belongs to the key set named \texttt{ks}.''
   A value of type \texttt{Key ks k} is a value of type \texttt{k}, with a ghost proof
@@ -932,7 +950,7 @@ should satisfy the property that every vertex referenced in any neighbor list is
 a valid key in the adjacency map.
 
 Traditionally, graph APIs that use adjacency representations require well-formed
-graphs, but make it the user's responsiblity to ensure well-formedness. For example,
+graphs, but make it the user's responsibility to ensure well-formedness. For example,
 the \texttt{Data.Graph} API from \texttt{containers} has a constructor that
 will silently discard edges whose targets do not appear in the node list.
 %%In \texttt{C++}, \texttt{boost::adjacency\_list} has an \texttt{add\_edge} function
@@ -1053,7 +1071,7 @@ rank-2 functions.
 -- Type exported, constructor hidden (but see `axiom`)
 data Proof p = QED
 
--- Attaching predicates to values
+-- Attaching proofs to values
 newtype a ::: p = SuchThat a
 
 (...) :: a -> Proof p -> (a ::: p)
@@ -1071,12 +1089,12 @@ data p == q
 
 -- Natural deduction rules (implementations all
 -- ignore parameters and return `QED`)
-andIntro   :: Proof p -> Proof q   -> Proof (p && q)
-andElimL   :: Proof (p && q)       -> Proof p
-orIntroL   :: Proof p              -> Proof (p || q)
-implIntro  :: (Proof p -> Proof q) -> Proof (p --> q)
-implElim   :: Proof (p --> q) -> Proof p -> Proof q
-notIntro   :: (Proof p -> Proof FALSE)   -> Proof (Not p)
+andIntro    :: Proof p -> Proof q   -> Proof (p && q)
+andElimL    :: Proof (p && q)       -> Proof p
+orIntroL    :: Proof p              -> Proof (p || q)
+implIntro   :: (Proof p -> Proof q) -> Proof (p --> q)
+implElim    :: Proof (p --> q) -> Proof p -> Proof q
+notIntro    :: (Proof p -> Proof FALSE)   -> Proof (Not p)
 contradicts :: Proof p -> Proof (Not p)  -> Proof FALSE
 absurd      :: Proof FALSE               -> Proof p
 refl        :: Proof (x == x)
@@ -1122,8 +1140,8 @@ that condition \texttt{p} holds.''
 
 We can now write, very explicitly, the requirement that our library places on the user
 of \texttt{head}: the parameter, called \texttt{xs}, must have outermost constructor
-\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons}, and write down the definition
-of \texttt{gdpHead}:
+\texttt{(:)}. So we simply introduce a predicate \texttt{IsCons} using an empty datatype,
+and write down the definition of a GDP-style \texttt{head}:
 \begin{minted}[frame=none]{haskell}
 data IsNil  xs
 data IsCons xs
@@ -1131,11 +1149,12 @@ data IsCons xs
 head :: ([a] ~~ xs ::: IsCons xs) -> a
 head xs = Prelude.head (the xs)
 \end{minted}
-The \texttt{:::} type is similar to the \texttt{Refined} type from the \texttt{refinement} library \cite{refined},
-but it gains extra power when used together with names.
-In particular, names provide the mechanism that allows us to take predicates about \emph{specific} values and
+The \texttt{(:::)} type is similar to the \texttt{Refined} type from the \texttt{refinement} library \cite{refined},
+but it gains extra power when used together with names:
+names are the mechanism that allows us to take predicates about \emph{specific} values and
 encode them at the type level.
-The type \verb|([a] ~~ xs ::: IsCons xs)| becomes a statement about the particular list being passed to \texttt{gdpHead}.
+The type \verb|([a] ~~ xs ::: IsCons xs)|
+becomes a statement about the particular list being passed to \texttt{head}.
 The library user is now free to come up with a proof of \texttt{IsCons xs} in whatever way they please.
 
 
@@ -1162,13 +1181,13 @@ rev_length :: Proof (Length (Rev xs) == Length xs)
 rev_rev    :: Proof (Rev (Rev xs) == xs)
 rev_cons   :: Proof (IsCons xs) -> Proof (IsCons (Rev xs))
 
-data ListCase xs = IsNil  (Proof (IsNil  xs))
-                 | IsCons (Proof (IsCons xs)) 
+data ListCase a xs = IsCons (Proof (IsCons xs))
+                   | IsNil  (Proof (IsNil  xs))
 
-classify :: ([a] ~~ xs) -> ListCase xs
+classify :: ([a] ~~ xs) -> ListCase a xs
 classify xs = case the xs of
-  []    -> IsNil  axiom
   (_:_) -> IsCons axiom
+  []    -> IsNil  axiom
 \end{filecontents*}
 
 \begin{filecontents*}{ex2.hs}
@@ -1183,46 +1202,20 @@ dot_rev xs = name xs $ \vec ->
   dot (vec ...refl) (reverse vec ...rev_length)
 \end{filecontents*}
 
-\begin{figure}
-    \inputminted{haskell}{ex1.hs}
-    \caption{A GDP-style module for manipulating and reasoning about lists.
-      A variety of lemmas are exported by the module, to provide the
-      user with a rich set of building blocks for constructing safety proofs.
-       \label{lemma-demo}}
-\end{figure}
-\begin{figure}
-    \inputminted{haskell}{ex2.hs}
-    \caption{A user-defined dot product function that can only be used on same-sized lists,
-      and a usage example. In the implementation of \texttt{dot\_rev}, the user makes the use
-      of \texttt{dot} well-typed by expressing a proof that
-      \texttt{vec} and \texttt{reverse vec} have the same length.\label{dot-product}}
-\end{figure}
-
 \subsection{Logical combinators for ghostly proofs}
 
 \begin{filecontents*}{tableaux.hs}
-type Theorem p q = (p --> q) --> (Not q --> Not p)
-proof1, proof2 :: Proof (Theorem p q)
+proof1, proof2 :: Proof ((p --> q) --> (Not q --> Not p))
   
 proof1 =
-  impl_intro $ \p_implies_q ->
-    impl_intro $ \not_q ->
-      not_intro $ \p -> do
-        q <- impl_elim p_imples_q p
-        contradicts q not_q
+  implIntro $ \p2q ->
+    implIntro $ \notq ->
+      notIntro $ \p ->
+        (implElim p2q p) `contradicts` notq
 
 proof2 = tableaux
 \end{filecontents*}
 
-\begin{figure}[b]
-  \inputminted{haskell}{tableaux.hs}
-  \caption{Proving the same theorem in two different ways. The first proof
-    uses the \texttt{Monad} instance for
-    \texttt{Proof} and the deduction rules from \Cref{predicate-logic}. The second
-    proof uses a typechecker plugin, exposed through the \texttt{tableaux}
-    function (\Cref{tactics}).
-    \label{tableaux-example}}
-\end{figure}
 We now have a mechanism for encoding arbitrary properties as phantom types. But how will the user
 create ghostly proofs to inhabit those phantom types?
 We can begin with a very simple \texttt{Proof} type,
@@ -1236,11 +1229,6 @@ produce terms of type \texttt{Proof p}.
 
 Once we have constructed a proof of type \texttt{Proof p}, we can use the \texttt{(...)} combinator to attach that proof to a value of type \texttt{a}, producing a value of type \verb|(a ::: p)|. Note that \texttt{p} will often be a proof \emph{about} the wrapped value,
 but that is not required! Any value can carry any proof; the only thing that links value to proof is the use of a common name.
-
-The proof combinators of \Cref{predicate-logic} can be seen in action
-in \texttt{proof1} of \Cref{tableaux-example} and, at a smaller scale, in the
-definition of \texttt{ok} in \Cref{idioms-fig}. Another application appears in \Cref{dot-product}, where the user defines a dot product function that only can be applied to same-sized lists.
-The user then supplies evidence to convince the compiler that the dot product of a list with its reverse is legal.
 
 \subsection{Naming library functions}
 To help the user create domain-relevant proofs, a library author may wish to export a lemma such
@@ -1266,12 +1254,13 @@ defn = coerce
 The idea is that a library author can introduce a new name \texttt{X} by
 defining \texttt{X} as a \texttt{newtype} alias of \texttt{Defn}. If the library author does not
 export the constructor of \texttt{X}, then the constraint \texttt{Defining X} \emph{only}
-holds in the module where \texttt{X} was defined. It follow that the \texttt{defn} function
+holds in the module where \texttt{X} was defined. It follows that the \texttt{defn} function
 can be used to attach the name \texttt{X} to an arbitrary value, but \emph{only} in the
 module where \texttt{X} was defined. By exporting \texttt{defn} with the \texttt{Defining f}
-constraint, the \texttt{Named} module allows library authors to introduce new ***
+constraint, the \texttt{Named} module allows library authors to introduce new names and axioms,
+while \emph{users} remain safely restrained.
 
-How does the library author use this mechanism to introduce new names and axioms?
+How does the library author use this mechanism to introduce new names and axioms in practice?
 In the case of the list-reversing lemma, the author can write:
 \begin{minted}[frame=none]{haskell}
 newtype Rev xs = Rev Defn
@@ -1287,7 +1276,32 @@ the lemmas \emph{about} a function stand on their own.
 The library author can add any number of lemmas about \texttt{reverse}
 without modifying its signature. Furthermore, it also becomes easy to
 create lemmas that relate multiple functions, such as \verb|rev_length|
-and \verb|rev_cons| in \Cref{lemma-demo}.
+and \verb|rev_cons| in \Cref{lemma-demo}. A sample of client code for this
+library appears in \Cref{dot-product}, where the user defines a dot product function that only can be applied to same-sized lists.
+The user then supplies evidence to convince the compiler that the dot product of a list with its reverse is legal.
+
+\paragraph{On the safety of \texttt{defn}} It is instructive to momentarily return to the Simon example of \Cref{ghost-danger}. Isn't \texttt{defn}
+as bad as \texttt{any\_name}? There is certainly a danger, but only for the library \emph{author}
+who must be very careful indeed about how \texttt{Simon} is introduced. The library
+\emph{users} are still unable to name arbitrary values ``\texttt{Simon}'' merely by using \texttt{defn}, because
+they do not possess the necessary \texttt{Defining Simon} constraint.
+
+\begin{figure}[t]
+    \inputminted{haskell}{ex1.hs}
+    \caption{A GDP-style module for manipulating and reasoning about lists.
+      A variety of lemmas are exported by the module, to provide the
+      user with a rich set of building blocks for constructing safety proofs.
+       \label{lemma-demo}}
+\end{figure}
+\begin{figure}
+    \inputminted{haskell}{ex2.hs}
+    \caption{A user-defined dot product function that can only be used on same-sized lists,
+      and a usage example. In the implementation of \texttt{dot\_rev}, the user makes the use
+      of \texttt{dot} well-typed by expressing a proof that
+      \texttt{vec} and \texttt{reverse vec} have the same length.
+      Note that \texttt{refl} and \texttt{rev\_length} are effectively axiom schemas, and unification with
+      the type of \texttt{dot} selects the correct instances of these schemas.\label{dot-product}}
+\end{figure}
 
 \subsection{Building theory libraries}
 In both the \texttt{St} and the \texttt{justified-containers} case studies,
@@ -1300,10 +1314,9 @@ Luckily, it is simple to factor out axioms and deduction rules for specific theo
 from the libraries that make use of them. For example, we could publish a small
 library containing basic predicates and deduction rules about sets, such as:
 \begin{minted}[frame=none]{haskell}
-newtype xs #$\subseteq$# ys = Subset Defn
-subset_transitive ::
-  Proof (a #$\subseteq$# b) -> Proof (b #$\subseteq$# c) -> Proof (a #$\subseteq$# c)
-subset_transitive _ _ = axiom
+data xs #$\subseteq$# ys
+subset_tr :: Proof (a #$\subseteq$# b) -> Proof (b #$\subseteq$# c) -> Proof (a #$\subseteq$# c)
+subset_tr _ _ = axiom
 \end{minted}
 This same theory library could be used to reason about shared \texttt{St}
 regions and about key sets for maps, already achieving code reuse within
@@ -1316,7 +1329,7 @@ into \texttt{Assumed} and \texttt{Derived} submodules.\footnote{We only have ``c
  A small, core set of
  axioms are placed in the \texttt{Assumed} module and carefully audited for correctness.
  A larger set of lemmas, derived from these axioms using GDP
-proof combinators, resides in the \texttt{Derived} submodule. This separation
+proof combinators, reside in the \texttt{Derived} submodule. This separation
 allows the library author to build up a large collection of lemmas from a
 small---and hopefully easy-to-verify---set of basic axioms.
 
@@ -1327,16 +1340,25 @@ describing. The author only needs to check the validity of their own
 theory module; others can then re-use that validation for free.
 
 But how can the author of a theory library be confident that they wrote down
-the correct lemmas in the first place? There is always the ``think very hard
-about it'' approach, but we can do better. Formal verification tools like
-Liquid Haskell \cite{vazou2016liquid} or \texttt{hs-to-coq} \cite{spector2018total}
-can be applied by the author of the theory library to ensure that it presents a
-sound interface. Note that the tooling is only required by the author of the library;
-the end-users of the theory library only need to use plain Haskell. A simple
+the correct lemmas in the first place? To increase confidence, the author of the
+theory library can apply formal verification tools like
+Liquid Haskell \cite{vazou2016liquid} or \texttt{hs-to-coq} \cite{spector2018total},
+attempting to prove that the library presents a sound API. Note that the tooling is only
+required by the author of the library;
+the end-users of the theory library still use plain Haskell. A simple
 demonstration using Liquid Haskell can be found in this paper's repository \cite{this}.
 
-\subsection{Building custom proof tactics}\label{tactics}
 
+\begin{figure}[h]
+  \inputminted{haskell}{tableaux.hs}
+  \caption{Proving the same theorem in two different ways. The first proof
+    uses the proof combinators from \Cref{predicate-logic}. The second
+    proof uses a typechecker plugin, exposed through the \texttt{tableaux}
+    function (\Cref{tactics}).
+    \label{tableaux-example}}
+\end{figure}
+
+\subsection{Building custom proof tactics}\label{tactics}
 For simple properties, the task of writing a proof is not too difficult. But for
 more sophisticated properties, the deployment of \emph{proof tactics} becomes
 crucial. A proof tactic is a search strategy for proofs, usually targeted at
@@ -1346,8 +1368,7 @@ proving one particular class of theorems. For example, the \texttt{Coq} tactic
 
 Tactics are often designed with a specific domain in mind; to be most useful,
 theory creators (and library authors) should be able to create their own tactics
-when needed. For example, the author of  a library for  fixed-width numeric types
-may wish to create domain-specific proof tactics based around the theory of bitvectors.
+when needed. 
 
 One approach to providing custom tactics is to leverage \texttt{GHC}'s support for
 \emph{type-checker plugins}. These plugins hook into \texttt{GHC}'s $\textsf{OutsideIn}(X)$
@@ -1372,37 +1393,105 @@ The trick is that our plugin will first get a chance to check that the propositi
 a valid formula of propositional logic. Only then will the plugin allow \texttt{GHC}
 to replace \texttt{ProofByTableaux p} with \texttt{p}.
 
-Our type-checker plugin gets a chance to intervene whenever \texttt{GHC}
-meets a type equality constraint of the form \texttt{ProofByTableaux p $\sim$ p'}.
-When such a constraint is found, the plugin performs the following tasks:
-\begin{enumerate}
-\item Convert the \emph{type} \texttt{p'} to a \emph{formula} $\Phi$ in propositional
-  logic, introducing free variables for any subterms that are not built from the
-  propositional logic type constructors \verb|&&|, \verb#||#, \verb|-->|, and \verb|Not|.
-\item Invoke the solver for analytic tableaux, attempting to find an assignment of truth
-  values to variables such that $\neg \Phi$ is true.
-\item If the solver finds such a truth assignment, report an error: the user asked us
-  to apply the tactic to prove $\Phi$, but the variable assignment demonstrated that
-  $\Phi$ is actually \emph{false}.
-\item If the solver finds that no such truth assignment exists, then we have proven that
-  $\Phi$ is valid. Tell \texttt{GHC} to discharge the constraint \texttt{ProofByTableaux p $\sim$ p'}, replacing it with \texttt{p $\sim$ p'}.
-\end{enumerate}
+%% Our type-checker plugin gets a chance to intervene whenever \texttt{GHC}
+%% meets a type equality constraint of the form \texttt{ProofByTableaux p $\sim$ p'}.
+%% When such a constraint is found, the plugin performs the following tasks:
+%% \begin{enumerate}
+%% \item Convert the \emph{type} \texttt{p'} to a \emph{formula} $\Phi$ in propositional
+%%   logic, introducing free variables for any subterms that are not built from the
+%%   propositional logic type constructors \verb|&&|, \verb#||#, \verb|-->|, and \verb|Not|.
+%% \item Invoke the solver for analytic tableaux, attempting to find an assignment of truth
+%%   values to variables such that $\neg \Phi$ is true.
+%% \item If the solver finds such a truth assignment, report an error: the user asked us
+%%   to apply the tactic to prove $\Phi$, but the variable assignment demonstrated that
+%%   $\Phi$ is actually \emph{false}.
+%% \item If the solver finds that no such truth assignment exists, then we have proven that
+%%   $\Phi$ is valid. Tell \texttt{GHC} to discharge the constraint \texttt{ProofByTableaux p $\sim$ p'}, replacing it with \texttt{p $\sim$ p'}.
+%% \end{enumerate}
 For the user, the effect appears to be that \texttt{tableaux} can act as a value of
 type \texttt{Proof p} whenever \texttt{p} is a valid formula in propositional logic.
 A glance at \Cref{tableaux-example} demonstrates why proof tactics are so desirable:
 the user can just wave their hands and say ``this is true by basic facts from propositional logic,''
 instead of constructing a tedious proof by hand.
 
+\begin{filecontents*}{implicit.hs}
+head :: Fact (IsCons xs) => ([a] ~~ xs) -> a
+head xs = Prelude.head (the xs)
+
+gdpEndpts' = do
+  putStrLn "Enter a non-empty list of integers:"  
+  xs <- readLn
+  name xs $ \xs -> case classify' xs of
+    Cons -> using rev_cons xs $
+      return (head xs, head (reverse xs))
+    Nil  -> gdpEndpts'
+\end{filecontents*}
+
+\begin{figure}
+  \inputminted{haskell}{implicit.hs}
+  \caption{The original example from \Cref{idioms-fig}, using \texttt{reflection} to
+    implicitly propagate \texttt{Proof}s to their use-sites.
+    \label{implicit}}
+\end{figure}
+
 \subsection{Using reflection to pass implicit proofs}
+The \texttt{reflection} library is an implementation of Kiselyov and Shan's functional pearl about implicit configurations \cite{kiselyov2004functional}, allowing the user to pass values implicitly using Haskell's typeclass machinery.
+We can combine \texttt{reflection} with GDP in order to pass \emph{proofs} implicitly, so they seem to magically appear
+right at the moment they are required.
+ The relevant part of the \texttt{reflection}
+API consists of two functions: \texttt{give} lets the user make a proof implicit, and \texttt{given}
+recalls an implicit proof from the current context:
+\begin{minted}[frame=none]{haskell}
+type Fact p = Given (Proof p)  -- a useful constraint synonym
+give  :: Proof a -> (Fact a => t) -> t
+given :: Fact a => Proof a
+\end{minted}
 
-\section{Related Work}
-The use of phantom type parameters to **** is well-known
+The \texttt{using} combinator is useful for applying an implication to the implicit context. The
+named parameter \texttt{x} is used to help select the right proof from the context.
+\begin{minted}[frame=none]{haskell}
+using :: Fact (p n) =>
+   (Proof (p n) -> Proof q) -> (a ~~ n) -> (Fact q => t) -> t
+using impl x = give (impl given)
+\end{minted}
 
-Lightweight static capabilities \cite{kiselyov2006lightweight}
+Pattern-matching on a GADT constructor can bring new instances into scope;
+this can be used as a mechanism for automatically introducing \texttt{Fact (IsCons xs)} inside the cons branch of
+a pattern-match:
 
-There are a variety of other approaches to adding **, such as Liquid Haskell,***
+\begin{minted}[frame=none]{haskell}
+data ListCase' a xs where
+  Cons :: Fact (IsCons xs) => ListCase' a xs
+  Nil  :: Fact (IsNil  xs) => ListCase' a xs
 
-\section*{Summary}
+classify' :: forall a xs. ([a] ~~ xs) -> ListCase' a xs
+classify' xs = case the xs of
+  (_:_) -> give (axiom :: Proof (IsCons xs)) Cons
+  []    -> give (axiom :: Proof (IsNil  xs)) Nil
+\end{minted}
+
+%This approach can save the end-user from the hassle of manually moving evidence from one ghost to another.
+It is easy to see the benefit when comparing \Cref{implicit} with the original GDP example in \Cref{idioms-fig}.
+ On the other hand, there is a small amount of overhead due to the passing of
+typeclass dictionaries for \texttt{Fact}s, and it is not always easy to extract the right
+proof from the implicit context without adding type annotations.
+
+\section{Related work}
+Phantom type parameters have several well-known applications in API design, supporting typed
+embedded domain-specific languages (EDSLs) \cite{Leijen:1999:DSE:1267936.1267945}, pointer subtyping \cite{Leijen:2004:WPC:1017472.1017483}, and access control policies \cite{Fluet:2006:PTS:1180085.1180088}. Most of these applications
+rely on monomorphic or universally-quantified phantom type parameters; by contrast, GDP relies on existentially-quantified
+phantom names, and a rich, extensible set of combinators for building arguments about the named values.
+
+Previous designs that use existentially-quantified phantom types include \emph{lazy state threads} \cite{launchbury1994lazy} and \emph{lightweight static capabilities} \cite{kiselyov2006lightweight}. The GDP approach explicitly separates two orthogonal concerns within these designs: the introduction of existentially-quantified type-level names, and the manipulation of proofs about those named values.
+
+There are a variety of other approaches to checking the correctness of Haskell code. Liquid Haskell works with an SMT solver to verify
+certain classes of properties about Haskell functions \cite{vazou2016liquid}. \texttt{hs-to-coq} converts Haskell code to
+Coq code, allowing theorems to be proved within the Coq proof assistant \cite{spector2018total}. In both cases, the properties and proofs exist
+outside of (or in parallel to) the existing Haskell code. In the GDP approach, properties and proofs are carried by
+normal Haskell types and are checked by compilation.
+
+
+\section{Summary}
 Ghosts of Departed Proofs provides a novel approach to safe API design  that enables
 a dialogue between the library and the user. By giving the user a vocabulary for expressing
 safety arguments, GDP-style APIs avoid
@@ -1414,14 +1503,185 @@ You can try it with your own libraries, today!
 \vspace{-0.4em}
 \subsection*{Acknowledgments}
 \vspace{-0.1em}
-The author would like to thank Baldur Blöndal, Hillel Wayne, Philipp Kant, Matt Parsons,
+The author would like to thank Baldur Bl\"ondal, Hillel Wayne, Philipp Kant, Matt Parsons,
 and the anonymous reviewers for
 their helpful feedback on a draft of this paper, and Input Output HK for supporting
 this work.
-\vspace{-0.2em}
 
-\bibliographystyle{abbrvnat}
+%\bibliographystyle{abbrvnat}
+%\bibliography{gdp.bib}
 
-\bibliography{gdp.bib}
+\begin{thebibliography}{22}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
+\bibitem[Abrams(2003)]{pitofsuccess}
+B.~Abrams.
+\newblock The pit of success.
+\newblock
+  \url{https://blogs.msdn.microsoft.com/brada/2003/10/02/the-pit-of-success/},
+  2003.
+\newblock Accessed: 2018-06-04.
+
+\bibitem[Augustsson(1998)]{augustsson1998cayenne}
+L.~Augustsson.
+\newblock Cayenne—a language with dependent types.
+\newblock In \emph{International School on Advanced Functional Programming},
+  pages 240--267. Springer, 1998.
+
+\bibitem[Bove and Dybjer(2009)]{bove2009dependent}
+A.~Bove and P.~Dybjer.
+\newblock Dependent types at work.
+\newblock In \emph{Language engineering and rigorous software development},
+  pages 57--99. Springer, 2009.
+
+\bibitem[Breitner et~al.(2014)Breitner, Eisenberg, Peyton~Jones, and
+  Weirich]{Breitner:2014:SZC:2692915.2628141}
+J.~Breitner, R.~A. Eisenberg, S.~Peyton~Jones, and S.~Weirich.
+\newblock Safe zero-cost coercions for haskell.
+\newblock \emph{SIGPLAN Not.}, 49\penalty0 (9):\penalty0 189--202, Aug. 2014.
+\newblock ISSN 0362-1340.
+\newblock \doi{10.1145/2692915.2628141}.
+\newblock URL \url{http://doi.acm.org/10.1145/2692915.2628141}.
+
+\bibitem[Fluet and Pucella(2006)]{Fluet:2006:PTS:1180085.1180088}
+M.~Fluet and R.~Pucella.
+\newblock Phantom types and subtyping.
+\newblock \emph{J. Funct. Program.}, 16\penalty0 (6):\penalty0 751--791, Nov.
+  2006.
+\newblock ISSN 0956-7968.
+\newblock \doi{10.1017/S0956796806006046}.
+\newblock URL \url{http://dx.doi.org/10.1017/S0956796806006046}.
+
+\bibitem[Freeman and Pfenning(1991)]{freeman1991refinement}
+T.~Freeman and F.~Pfenning.
+\newblock Refinement types for {ML}.
+\newblock In \emph{Proceedings of the ACM SIGPLAN 1991 Conference on
+  Programming Language Design and Implementation}, PLDI '91, pages 268--277,
+  New York, NY, USA, 1991. ACM.
+\newblock ISBN 0-89791-428-7.
+\newblock \doi{10.1145/113445.113468}.
+\newblock URL \url{http://doi.acm.org/10.1145/113445.113468}.
+
+\bibitem[Kiselyov and Shan(2004)]{kiselyov2004functional}
+O.~Kiselyov and C.-c. Shan.
+\newblock Functional pearl: implicit configurations--or, type classes reflect
+  the values of types.
+\newblock In \emph{Proceedings of the 2004 ACM SIGPLAN workshop on Haskell},
+  pages 33--44. ACM, 2004.
+
+\bibitem[Kiselyov and Shan(2007)]{kiselyov2006lightweight}
+O.~Kiselyov and C.-c. Shan.
+\newblock Lightweight static capabilities.
+\newblock \emph{Electron. Notes Theor. Comput. Sci.}, 174\penalty0
+  (7):\penalty0 79--104, June 2007.
+\newblock ISSN 1571-0661.
+\newblock \doi{10.1016/j.entcs.2006.10.039}.
+\newblock URL \url{http://dx.doi.org/10.1016/j.entcs.2006.10.039}.
+
+\bibitem[Launchbury and Peyton~Jones(1994)]{launchbury1994lazy}
+J.~Launchbury and S.~L. Peyton~Jones.
+\newblock Lazy functional state threads.
+\newblock In \emph{ACM SIGPLAN Notices}, volume~29, pages 24--35. ACM, 1994.
+
+\bibitem[Leavens et~al.(1999)Leavens, Baker, and Ruby]{leavens1999jml}
+G.~T. Leavens, A.~L. Baker, and C.~Ruby.
+\newblock {JML}: A notation for detailed design.
+\newblock In \emph{Behavioral Specifications of Businesses and Systems}, pages
+  175--188. Springer, 1999.
+
+\bibitem[Leijen(2004)]{Leijen:2004:WPC:1017472.1017483}
+D.~Leijen.
+\newblock {wxHaskell}: A portable and concise {GUI} library for {Haskell}.
+\newblock In \emph{Proceedings of the 2004 ACM SIGPLAN Workshop on Haskell},
+  Haskell '04, pages 57--68, New York, NY, USA, 2004. ACM.
+\newblock ISBN 1-58113-850-4.
+\newblock \doi{10.1145/1017472.1017483}.
+\newblock URL \url{http://doi.acm.org/10.1145/1017472.1017483}.
+
+
+\bibitem[Leijen and Meijer(1999)]{Leijen:1999:DSE:1267936.1267945}
+D.~Leijen and E.~Meijer.
+\newblock Domain specific embedded compilers.
+\newblock In \emph{Proceedings of the 2Nd Conference on Conference on
+  Domain-Specific Languages - Volume 2}, DSL'99, pages 9--9, Berkeley, CA, USA,
+  1999. USENIX Association.
+\newblock URL \url{http://dl.acm.org/citation.cfm?id=1267936.1267945}.
+
+\vspace{6in}
+
+\bibitem[Noonan(2018{\natexlab{a}})]{this}
+M.~Noonan.
+\newblock Ghosts of {D}eparted {P}roofs.
+\newblock \url{http://www.github.com/matt-noonan/gdp-paper/},
+  2018{\natexlab{a}}.
+\newblock Accessed: 2018-06-03.
+
+\bibitem[Noonan(2018{\natexlab{b}})]{this-hackage}
+M.~Noonan.
+\newblock The {gdp} library.
+\newblock \url{http://hackage.haskell.org/package/gdp}, 2018{\natexlab{b}}.
+\newblock Accessed: 2018-06-03.
+
+\bibitem[Smullyan(1995)]{smullyan1995first}
+R.~M. Smullyan.
+\newblock \emph{First-order logic}.
+\newblock Courier Corporation, 1995.
+
+
+
+
+\bibitem[Spector-Zabusky et~al.(2018)Spector-Zabusky, Breitner, Rizkallah, and
+  Weirich]{spector2018total}
+A.~Spector-Zabusky, J.~Breitner, C.~Rizkallah, and S.~Weirich.
+\newblock Total {Haskell} is reasonable {Coq}.
+\newblock In \emph{Proceedings of the 7th ACM SIGPLAN International Conference
+  on Certified Programs and Proofs}, pages 14--27. ACM, 2018.
+
+
+\bibitem[Stolarek et~al.(2015)Stolarek, Peyton~Jones, and
+  Eisenberg]{stolarek2015injective}
+J.~Stolarek, S.~Peyton~Jones, and R.~A. Eisenberg.
+\newblock Injective type families for {Haskell}.
+\newblock In \emph{Proceedings of the 2015 ACM SIGPLAN Symposium on Haskell},
+  Haskell '15, pages 118--128, New York, NY, USA, 2015. ACM.
+\newblock ISBN 978-1-4503-3808-0.
+\newblock \doi{10.1145/2804302.2804314}.
+\newblock URL \url{http://doi.acm.org/10.1145/2804302.2804314}.
+
+\bibitem[Timany et~al.(2017)Timany, Stefanesco, Krogh-Jespersen, and
+  Birkedal]{timany2017logical}
+A.~Timany, L.~Stefanesco, M.~Krogh-Jespersen, and L.~Birkedal.
+\newblock A logical relation for monadic encapsulation of state: Proving
+  contextual equivalences in the presence of {runST}.
+\newblock \emph{Proceedings of the ACM on Programming Languages}, 2\penalty0
+  (POPL):\penalty0 64, 2017.
+
+\bibitem[Vazou(2016)]{vazou2016liquid}
+N.~Vazou.
+\newblock \emph{Liquid Haskell: Haskell as a theorem prover}.
+\newblock University of California, San Diego, 2016.
+
+\bibitem[Volkov(2016)]{refined}
+N.~Volkov.
+\newblock Announcing the refinement types library.
+\newblock \url{http://nikita-volkov.github.io/refined/}, 2016.
+\newblock Accessed: 2018-05-30.
+
+\bibitem[Vytiniotis et~al.(2011)Vytiniotis, Jones, Schrijvers, and
+  Sulzmann]{vytiniotis2011outsidein}
+D.~Vytiniotis, S.~P. Jones, T.~Schrijvers, and M.~Sulzmann.
+\newblock {OutsideIn}(x): Modular type inference with local assumptions.
+\newblock \emph{Journal of functional programming}, 21\penalty0 (4-5):\penalty0
+  333--412, 2011.
+
+\bibitem[Wadler(1990)]{wadler1990linear}
+P.~Wadler.
+\newblock Linear types can change the world!
+\newblock In \emph{Programming Concepts and Methods}. North, 1990.
+
+\end{thebibliography}
 \end{document}

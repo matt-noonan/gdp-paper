@@ -22,6 +22,7 @@ library
                      , Sorted
                      , St
                      , Maps
+                     , GdpList
                      , Tableaux
                      , Propositional
                      , Arguments
@@ -32,6 +33,7 @@ library
                      , Examples.St
                      , Examples.Logic
                      , Examples.Lists
+                     , Examples.Dot2
                      , Examples.Liquid
                      , Examples.Liquid.Internal
   build-depends:       base >= 4.7 && < 5

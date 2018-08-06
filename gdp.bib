@@ -49,10 +49,18 @@
 }
 
 @misc{this,
-  title = {Ghosts of Departed Proofs},
+  title = {Ghosts of {D}eparted {P}roofs},
   author={Noonan, Matt},
   year={2018},
   howpublished = {\url{http://www.github.com/matt-noonan/gdp-paper/}},
+  note = {Accessed: 2018-06-03}
+}
+
+@misc{this-hackage,
+  title = {The {gdp} library},
+  author={Noonan, Matt},
+  year={2018},
+  howpublished = {\url{http://hackage.haskell.org/package/gdp}},
   note = {Accessed: 2018-06-03}
 }
 
@@ -81,22 +89,29 @@
   publisher={Springer}
 }
 
-@book{freeman1991refinement,
-  title={Refinement types for ML},
-  author={Freeman, Tim and Pfenning, Frank},
-  volume={26},
-  number={6},
-  year={1991},
-  publisher={ACM}
+@inproceedings{freeman1991refinement,
+ author = {Freeman, Tim and Pfenning, Frank},
+ title = {Refinement Types for {ML}},
+ booktitle = {Proceedings of the ACM SIGPLAN 1991 Conference on Programming Language Design and Implementation},
+ series = {PLDI '91},
+ year = {1991},
+ isbn = {0-89791-428-7},
+ location = {Toronto, Ontario, Canada},
+ pages = {268--277},
+ numpages = {10},
+ url = {http://doi.acm.org/10.1145/113445.113468},
+ doi = {10.1145/113445.113468},
+ acmid = {113468},
+ publisher = {ACM},
+ address = {New York, NY, USA},
 }
 
 @inproceedings{wadler1990linear,
-  title={Linear types can change the world},
+  title={Linear types can change the world!},
   author={Wadler, Philip},
-  booktitle={IFIP TC},
-  volume={2},
-  pages={347--359},
-  year={1990}
+    booktitle = {Programming Concepts and Methods},
+    year = {1990},
+    publisher = {North}
 }
 
 @misc{pitofsuccess,
@@ -143,30 +158,101 @@
   publisher={Cambridge University Press}
 }
 
-@article{kiselyov2006lightweight,
-  title={Lightweight static capabilities},
-  author={Kiselyov, Oleg and Shan, Chung-chieh},
-  journal={PLPV’06: Programming Languages meets Program Verification},
-  pages={28},
-  year={2006}
-}
-
 @inproceedings{stolarek2015injective,
   title={Injective type families for {Haskell}},
-  author={Stolarek, Jan and Peyton Jones, Simon and Eisenberg, Richard A},
-  booktitle={ACM SIGPLAN Notices},
-  volume={50},
-  number={12},
-  pages={118--128},
-  year={2015},
+  author={Stolarek, Jan and Peyton Jones, Simon and Eisenberg, Richard A.},
+ booktitle = {Proceedings of the 2015 ACM SIGPLAN Symposium on Haskell},
+ series = {Haskell '15},
+ year = {2015},
+ isbn = {978-1-4503-3808-0},
+ location = {Vancouver, BC, Canada},
+ pages = {118--128},
+ numpages = {11},
+ url = {http://doi.acm.org/10.1145/2804302.2804314},
+ doi = {10.1145/2804302.2804314},
+ acmid = {2804314},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {Haskell, functional dependencies, injectivity, type families, type-level programming},
+}
+
+@article{kiselyov2006lightweight,
+ author = {Kiselyov, Oleg and Shan, Chung-chieh},
+ title = {Lightweight Static Capabilities},
+ journal = {Electron. Notes Theor. Comput. Sci.},
+ issue_date = {June, 2007},
+ volume = {174},
+ number = {7},
+ month = jun,
+ year = {2007},
+ issn = {1571-0661},
+ pages = {79--104},
+ numpages = {26},
+ url = {http://dx.doi.org/10.1016/j.entcs.2006.10.039},
+ doi = {10.1016/j.entcs.2006.10.039},
+ acmid = {1265736},
+ publisher = {Elsevier Science Publishers B. V.},
+ address = {Amsterdam, The Netherlands, The Netherlands},
+ keywords = {Modular programming, safety property, static types, verification},
+}
+
+@inproceedings{kiselyov2004functional,
+  title={Functional pearl: implicit configurations--or, type classes reflect the values of types},
+  author={Kiselyov, Oleg and Shan, Chung-chieh},
+  booktitle={Proceedings of the 2004 ACM SIGPLAN workshop on Haskell},
+  pages={33--44},
+  year={2004},
   organization={ACM}
 }
 
-@article{kiselyov2006lightweight,
-  title={Lightweight static capabilities},
-  author={Kiselyov, Oleg and Shan, Chung-chieh},
-  journal={PLPV’06: Programming Languages meets Program Verification},
-  pages={28},
-  year={2006},
-  publisher={Citeseer}
+@inproceedings{Leijen:1999:DSE:1267936.1267945,
+ author = {Leijen, Daan and Meijer, Erik},
+ title = {Domain Specific Embedded Compilers},
+ booktitle = {Proceedings of the 2Nd Conference on Conference on Domain-Specific Languages - Volume 2},
+ series = {DSL'99},
+ year = {1999},
+ location = {Austin, Texas},
+ pages = {9--9},
+ numpages = {1},
+ url = {http://dl.acm.org/citation.cfm?id=1267936.1267945},
+ acmid = {1267945},
+ publisher = {USENIX Association},
+ address = {Berkeley, CA, USA},
 }
+
+@article{Fluet:2006:PTS:1180085.1180088,
+ author = {Fluet, Matthew and Pucella, Riccardo},
+ title = {Phantom Types and Subtyping},
+ journal = {J. Funct. Program.},
+ issue_date = {November 2006},
+ volume = {16},
+ number = {6},
+ month = nov,
+ year = {2006},
+ issn = {0956-7968},
+ pages = {751--791},
+ numpages = {41},
+ url = {http://dx.doi.org/10.1017/S0956796806006046},
+ doi = {10.1017/S0956796806006046},
+ acmid = {1180088},
+ publisher = {Cambridge University Press},
+ address = {New York, NY, USA},
+}
+
+@inproceedings{Leijen:2004:WPC:1017472.1017483,
+ author = {Leijen, Daan},
+ title = {{wxHaskell}: A Portable and Concise {GUI} Library for {Haskell}},
+ booktitle = {Proceedings of the 2004 ACM SIGPLAN Workshop on Haskell},
+ series = {Haskell '04},
+ year = {2004},
+ isbn = {1-58113-850-4},
+ location = {Snowbird, Utah, USA},
+ pages = {57--68},
+ numpages = {12},
+ url = {http://doi.acm.org/10.1145/1017472.1017483},
+ doi = {10.1145/1017472.1017483},
+ acmid = {1017483},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {C++, Haskell, combinator library, graphical user interface, layout, wxWidgets},
+} 

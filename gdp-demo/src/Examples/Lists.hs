@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds     #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -77,6 +78,7 @@ endpts = do
 
 -- First, we define patterns that bring the IsCons or IsNil proofs into
 -- scope during pattern matching:
+{-
 classifyList :: forall xs a. ([a] ~~ xs)
             -> Either (a ~~ Head xs, [a] ~~ Tail xs, Dict (Fact (IsCons xs)))
                       (Dict (Fact (IsNil  xs)))
@@ -89,6 +91,16 @@ pattern Cons h t <- (classifyList -> Left (h, t, Dict))
 
 pattern Nil :: () => Fact (IsNil xs) => ([a] ~~ xs)
 pattern Nil  <- (classifyList -> Right Dict)
+-}
+
+data ListCase' xs a where
+    Cons :: Fact (IsCons xs) => (a ~~ Head xs) -> ([a] ~~ Tail xs) -> ListCase' xs a
+    Nil  :: Fact (IsNil xs) => ListCase' xs a
+
+classify' :: forall a xs. ([a] ~~ xs) -> ListCase' xs a
+classify' xs = case the xs of
+    (h:t) -> give (axiom :: Proof (IsCons xs)) (Cons (defn h) (defn t))
+    []    -> give (axiom :: Proof (IsNil xs))  Nil
 
 -----
 head' :: Fact (IsCons xs) => ([a] ~~ xs) -> a
@@ -98,7 +110,7 @@ endpts' :: IO (Int, Int)
 endpts' = do
   putStrLn "Enter a non-empty list of integers:"
   xs <- readLn
-  name xs $ \xs -> case xs of
-    Cons _ _ -> noting (rev_cons `on` xs) $
+  name xs $ \xs -> case classify' xs of
+    Cons _ _ -> using rev_cons xs $
       return (head' xs, head' (reverse xs))
     Nil      -> endpts'
